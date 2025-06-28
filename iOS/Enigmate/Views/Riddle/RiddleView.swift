@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct RiddleScreen: View {
+struct RiddleView: View {
 
     @Environment(\.supabase) private var supabase
     @State private var riddle: Riddle?
@@ -37,9 +37,9 @@ struct RiddleScreen: View {
     private func load() async {
         defer { loading = false }
         do {
-            if let ridd = try await supabase.todaysRiddle() {
+            if let ridd = try await supabase!.todaysRiddle() {
                 riddle = ridd
-                let imageData = try await supabase.downloadPuzzleImageData(path: ridd.imageUrl)
+                let imageData = try await supabase!.downloadPuzzleImageData(path: ridd.imageUrl)
                 image = Image(uiImage: UIImage(data: imageData)!)
             }
         } catch {

@@ -19,10 +19,4 @@ final class SupabaseManager {
             supabaseKey: Secrets.supabaseAnon
         )
     }
-
-    // Convenience short-cuts
-    var auth: AuthClient      { client.auth }
-    var db:   PostgrestClient { client.database }
-    var rpc:  FunctionsClient { client.functions }
-    var storage: StorageClient { client.storage }
 }

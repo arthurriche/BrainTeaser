@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DACB33A12E0DFEC2000ED8AA /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33A02E0DFEC2000ED8AA /* Auth */; };
+		DACB33A32E0DFEC2000ED8AA /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33A22E0DFEC2000ED8AA /* Functions */; };
+		DACB33A52E0DFEC2000ED8AA /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33A42E0DFEC2000ED8AA /* PostgREST */; };
+		DACB33A72E0DFEC2000ED8AA /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33A62E0DFEC2000ED8AA /* Realtime */; };
+		DACB33A92E0DFEC2000ED8AA /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33A82E0DFEC2000ED8AA /* Storage */; };
+		DACB33AB2E0DFEC2000ED8AA /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DACB33AA2E0DFEC2000ED8AA /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		DA6E86FA2E0CE82900EC367C /* Enigmate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Enigmate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +32,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DACB33A52E0DFEC2000ED8AA /* PostgREST in Frameworks */,
+				DACB33A32E0DFEC2000ED8AA /* Functions in Frameworks */,
+				DACB33AB2E0DFEC2000ED8AA /* Supabase in Frameworks */,
+				DACB33A12E0DFEC2000ED8AA /* Auth in Frameworks */,
+				DACB33A92E0DFEC2000ED8AA /* Storage in Frameworks */,
+				DACB33A72E0DFEC2000ED8AA /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +80,12 @@
 			);
 			name = Enigmate;
 			packageProductDependencies = (
+				DACB33A02E0DFEC2000ED8AA /* Auth */,
+				DACB33A22E0DFEC2000ED8AA /* Functions */,
+				DACB33A42E0DFEC2000ED8AA /* PostgREST */,
+				DACB33A62E0DFEC2000ED8AA /* Realtime */,
+				DACB33A82E0DFEC2000ED8AA /* Storage */,
+				DACB33AA2E0DFEC2000ED8AA /* Supabase */,
 			);
 			productName = Enigmate;
 			productReference = DA6E86FA2E0CE82900EC367C /* Enigmate.app */;
@@ -78,7 +99,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					DA6E86F92E0CE82900EC367C = {
 						CreatedOnToolsVersion = 16.4;
@@ -90,10 +111,12 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
-				Base,
 			);
 			mainGroup = DA6E86F12E0CE82900EC367C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA6E86FB2E0CE82900EC367C /* Products */;
 			projectDirPath = "";
@@ -324,6 +347,50 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DACB33A02E0DFEC2000ED8AA /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		DACB33A22E0DFEC2000ED8AA /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		DACB33A42E0DFEC2000ED8AA /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		DACB33A62E0DFEC2000ED8AA /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		DACB33A82E0DFEC2000ED8AA /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		DACB33AA2E0DFEC2000ED8AA /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DACB339F2E0DFEC2000ED8AA /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DA6E86F22E0CE82900EC367C /* Project object */;
 }

@@ -18,6 +18,8 @@
 
 import Foundation
 import Supabase
+import os.log
+import AuthenticationServices
 
 /// Main service class for handling all Supabase operations (authentication, database, storage)
 /// 
@@ -34,6 +36,9 @@ actor SupabaseService {
 
     // MARK: – Private state
     
+    /// Logger instance for this service
+    private let logger = Logger(subsystem: "com.enigmate.supabase", category: "service")
+    
     /// The main Supabase client instance for all API operations
     private let client: SupabaseClient 
     
@@ -41,6 +46,7 @@ actor SupabaseService {
     /// The didSet observer ensures all registered listeners get notified of session changes
     private var session: Session? { 
         didSet { 
+            logger.info("Authentication session changed: \(self.session?.user.email ?? "nil", privacy: .private)")
             broadcast(session) // Notify all listeners when session changes
         } 
     }
@@ -56,9 +62,12 @@ actor SupabaseService {
         self.client = client
         self.session = session
         
+        logger.info("SupabaseService initialized with session: \(session?.user.email ?? "nil", privacy: .private)")
+        
         // Set up auth state change monitoring
         // Listen for auth state changes and update session
         Task {
+            logger.debug("Starting auth state change monitoring")
             for await (_, newSession) in client.auth.authStateChanges {
                 await self.updateSession(newSession)
             }
@@ -67,11 +76,28 @@ actor SupabaseService {
 
     /// Async factory method to create the service, handling async/throwing property access
     static func create() async throws -> SupabaseService {
+        // Need to create a new logger instance here because the logger is private to the service
+        let logger = Logger(subsystem: "com.enigmate.supabase", category: "service")
+        logger.info("Creating SupabaseService instance")
+        
         let client = SupabaseClient(
             supabaseURL: Secrets.supabaseUrl,
             supabaseKey: Secrets.supabaseAnon
         )
-        let session = try await client.auth.session
+        
+        // Try to get existing session, but don't fail if there isn't one
+        // This is especially important for local development where users start fresh
+        let session: Session?
+        do {
+            session = try await client.auth.session
+            logger.info("Found existing session for user: \(session?.user.email ?? "unknown", privacy: .private)")
+        } catch {
+            // No existing session found - this is normal for fresh app launches
+            session = nil
+            logger.info("No existing session found - user will need to sign in")
+        }
+        
+        logger.info("SupabaseService created successfully")
         return SupabaseService(client: client, session: session)
     }
 
@@ -81,7 +107,8 @@ actor SupabaseService {
     /// This is a "snapshot" - it gives you the current state but doesn't notify of future changes
     /// Use this when you just need to check if user is logged in at a specific moment
     func currentSession() -> Session? { 
-        session 
+        logger.debug("Current session requested: \(self.session?.user.email ?? "nil", privacy: .private)")
+        return session 
     }
 
     /// Creates an AsyncSequence that yields authentication state changes
@@ -94,7 +121,8 @@ actor SupabaseService {
     /// }
     /// ```
     func authStateStream() -> AsyncStream<Session?> {
-        AsyncStream { continuation in
+        logger.debug("Creating new auth state stream")
+        return AsyncStream { continuation in
             Task { [weak self] in
                 guard let self else { return }
                 // 1) Immediately send the current session state to the new listener
@@ -119,29 +147,66 @@ actor SupabaseService {
     /// Private actor-isolated method to add a listener
     private func addListener(id: UUID, _ callback: @escaping (Session?) -> Void) {
         listeners[id] = callback
+        logger.debug("Added auth listener with ID: \(id)")
     }
 
     /// Private actor-isolated method to remove a listener
     private func removeListener(id: UUID) {
         listeners.removeValue(forKey: id)
+        logger.debug("Removed auth listener with ID: \(id)")
     }
 
     /// Registers a new user account with email and password
     /// Throws an error if registration fails (invalid email, weak password, etc.)
     func signUp(email: String, password: String) async throws {
-        _ = try await client.auth.signUp(email: email, password: password)
+        logger.info("Attempting user sign up for email: \(email, privacy: .private)")
+        do {
+            _ = try await client.auth.signUp(email: email, password: password)
+            logger.info("User sign up successful for email: \(email, privacy: .private)")
+        } catch {
+            logger.error("User sign up failed for email: \(email, privacy: .private), error: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     /// Authenticates a user with email and password
     /// Throws an error if credentials are invalid or authentication fails
     func signIn(email: String, password: String) async throws {
-        _ = try await client.auth.signIn(email: email, password: password)
+        logger.info("Attempting user sign in for email: \(email, privacy: .private)")
+        do {
+            _ = try await client.auth.signIn(email: email, password: password)
+            logger.info("User sign in successful for email: \(email, privacy: .private)")
+        } catch {
+            logger.error("User sign in failed for email: \(email, privacy: .private), error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Signs in the current user with LinkedIn
+    func signInWithLinkedIn() async throws {
+        logger.info("Attempting user sign in with LinkedIn")
+        do {
+            _ = try await client.auth.signInWithOAuth(
+                provider: .linkedin,
+        redirectTo: URL(string: "https://psziiemacrqukdutwvic.supabase.co/auth/v1/callback"),
+        scopes: "r_liteprofile r_emailaddress"
+            ) { (session: ASWebAuthenticationSession) in
+                logger.info("User sign in with LinkedIn successful")
+            }
+        }
     }
 
     /// Signs out the current user and clears the session
     /// This will trigger auth state change notifications to all listeners
     func signOut() async throws {
-        try await client.auth.signOut()
+        logger.info("Attempting user sign out")
+        do {
+            try await client.auth.signOut()
+            logger.info("User sign out successful")
+        } catch {
+            logger.error("User sign out failed: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     // MARK: – Database Operations
@@ -155,13 +220,27 @@ actor SupabaseService {
     /// 
     /// The query uses .single() which expects exactly one result and throws if none or multiple found
     func todaysRiddle() async throws -> Riddle? {
+        // Format today's date as ISO8601 string (e.g., "2025-01-27")
         let today = ISO8601DateFormatter().string(from: .now)
-        return try await client
-            .from("riddles")
-            .select()
-            .eq("date", value: today)
-            .single()
-            .execute(decoding: Riddle?.self)
+        logger.info("Fetching today's riddle for date: \(today)")
+
+        do {
+            // Query the database for today's riddle using the new API
+            let riddle: [Riddle] = try await client
+                .from("riddles")           // Target table
+                .select()                  // Select all columns
+                .eq("date", value: today)  // Where date equals today
+                .single()                  // Expect exactly one result
+                .execute()
+                .value// Execute the query
+
+            // Decode the response into a Riddle object
+            logger.info("Successfully fetched today's riddle with ID: \(riddle[0].id)")
+            return riddle[0]
+        } catch {
+            logger.error("Failed to fetch today's riddle for date \(today): \(error.localizedDescription)")
+            throw error
+        }
     }
 
     // MARK: – File Storage Operations
@@ -175,9 +254,18 @@ actor SupabaseService {
     /// - Parameter path: The file path within the bucket (e.g., "riddle1.jpg")
     /// - Returns: Raw image data that can be converted to UIImage or SwiftUI Image
     func downloadPuzzleImageData(path: String) async throws -> Data {
-        try await client.storage
-            .from("riddle-images")     // Target storage bucket
-            .download(path: path)      // Download the file at the specified path
+        logger.info("Downloading puzzle image from path: \(path)")
+        do {
+            let imageData = try await client.storage
+                .from("riddle-images")     // Target storage bucket
+                .download(path: path)      // Download the file at the specified path
+            
+            logger.info("Successfully downloaded puzzle image from path: \(path), size: \(imageData.count) bytes")
+            return imageData
+        } catch {
+            logger.error("Failed to download puzzle image from path \(path): \(error.localizedDescription)")
+            throw error
+        }
     }
 
     // MARK: – Internal Helper Methods
@@ -185,12 +273,14 @@ actor SupabaseService {
     /// Updates the session state and triggers the didSet observer
     /// This method is called by the auth state change handler
     private func updateSession(_ newSession: Session?) {
+        logger.debug("Updating session state: \(newSession?.user.email ?? "nil", privacy: .private)")
         session = newSession  // This triggers the didSet observer which broadcasts to listeners
     }
 
     /// Notifies all registered listeners of a session state change
     /// Called automatically whenever the session changes (via didSet)
     private func broadcast(_ value: Session?) {
+        logger.debug("Broadcasting session change to \(self.listeners.count) listeners")
         listeners.values.forEach { $0(value) }
     }
 }

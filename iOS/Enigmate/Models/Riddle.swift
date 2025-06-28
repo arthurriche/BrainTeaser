@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Riddle: Identifiable, Decodable, Equatable {
+struct Riddle: Identifiable, Encodable, Decodable, Equatable {
     let id: UUID
     let date: Date
     let imageUrl: String

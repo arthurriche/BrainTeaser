@@ -15,6 +15,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 Deno.serve(async (_req) => {
   // Today in YYYY‑MM‑DD (UTC)
   const today = new Date().toISOString().slice(0, 10);
+  console.log(`Looking for riddle with release_date: ${today}`);
 
   // 1. Fetch today's riddle row
   const { data: riddle, error: riddleError } = await supabase

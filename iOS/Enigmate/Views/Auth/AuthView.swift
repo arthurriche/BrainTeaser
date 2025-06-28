@@ -19,16 +19,30 @@ struct AuthView: View {
             TextField("Email", text: $email)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
-            SecureField("Mot de passe", text: $password)
+            SecureField("Password", text: $password)
 
-            Button("Se connecter") {
+            Button("Connect") {
                 Task {
-                    do   { try await supabase.signIn(email: email, password: password) }
+                    do   { try await supabase!.signIn(email: email, password: password) }
                     catch { errorMessage = error.localizedDescription }
                 }
             }
             if let msg = errorMessage {
                 Text(msg).foregroundColor(.red)
+            }
+
+            Button("Create account") {
+                Task {
+                    do   { try await supabase!.signUp(email: email, password: password) }
+                    catch { errorMessage = error.localizedDescription }
+                }
+            }
+
+            Button("Sign in with LinkedIn") {
+                Task {
+                    do   { try await supabase!.signInWithLinkedIn() }
+                    catch { errorMessage = error.localizedDescription }
+                }
             }
         }
         .padding()
