@@ -40,15 +40,15 @@ struct EnigmateApp: App {
                         logger.error("Failed to initialize Supabase: \(error.localizedDescription)")
                     }
                 }
-                // Handle deep links for OAuth
+                // Handle deep links for authentication callbacks
                 .onOpenURL { url in
-                    // Handle the OAuth callback URL
+                    // Handle authentication callback URLs (OAuth login or password reset)
                     if url.scheme == "enigmate" {
                         Task {
                             do {
-                                try await supabaseService?.handleOAuthCallback(url)
+                                try await supabaseService?.handleAuthCallback(url)
                             } catch {
-                                logger.error("Error handling OAuth callback: \(error.localizedDescription)")
+                                logger.error("Error handling auth callback: \(error.localizedDescription)")
                             }
                         }
                     }

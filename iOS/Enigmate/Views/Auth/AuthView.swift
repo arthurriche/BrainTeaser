@@ -75,7 +75,7 @@ struct AuthView: View {
                 // Error message display
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
-                        .foregroundColor(.red.opacity(0.9)) // Adjusted red for better visibility
+                        .foregroundColor(Color.matchingRed.opacity(0.9)) // Adjusted red for better visibility
                         .font(.sfCompactRounded(fontStyle: .caption))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)

@@ -43,7 +43,7 @@ struct EmailAuthView: View {
     
     /// Returns the appropriate border color based on email validation state
     private var emailBorderColor: Color {
-        return emailHasError ? Color.red.opacity(0.8) : Color.primaryText.opacity(0.8)
+        return emailHasError ? Color.matchingRed.opacity(0.8) : Color.primaryText.opacity(0.8)
     }
     
     /// Validates if password meets requirements (at least 6 characters)
@@ -58,12 +58,12 @@ struct EmailAuthView: View {
     
     /// Returns appropriate border color for password field
     private var passwordBorderColor: Color {
-        return passwordHasError ? Color.red.opacity(0.8) : Color.primaryText.opacity(0.8)
+        return passwordHasError ? Color.matchingRed.opacity(0.8) : Color.primaryText.opacity(0.8)
     }
     
     /// Returns appropriate border color for full name field
     private var fullNameBorderColor: Color {
-        return fullNameHasError ? Color.red.opacity(0.8) : Color.primaryText.opacity(0.8)
+        return fullNameHasError ? Color.matchingRed.opacity(0.8) : Color.primaryText.opacity(0.8)
     }
     
     var body: some View {
@@ -387,11 +387,11 @@ struct EmailAuthView: View {
                     ForEach(fieldValidationMessages, id: \.self) { message in
                         HStack {
                             Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundColor(.red.opacity(0.8))
+                                .foregroundColor(Color.matchingRed.opacity(0.8))
                                 .font(.caption)
                             Text(message)
                                 .font(.sfCompactRounded(fontStyle: .caption))
-                                .foregroundColor(.red.opacity(0.9))
+                                .foregroundColor(Color.matchingRed.opacity(0.9))
                         }
                     }
                 }
@@ -402,11 +402,11 @@ struct EmailAuthView: View {
             if let errorMessage = errorMessage {
                 HStack {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.red.opacity(0.8))
+                        .foregroundColor(Color.matchingRed.opacity(0.8))
                         .font(.caption)
                     Text(errorMessage)
                         .font(.sfCompactRounded(fontStyle: .caption))
-                        .foregroundColor(.red.opacity(0.9))
+                        .foregroundColor(Color.matchingRed.opacity(0.9))
                         .multilineTextAlignment(.leading)
                         .lineLimit(3)
                 }

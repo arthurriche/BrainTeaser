@@ -186,9 +186,9 @@ actor SupabaseService {
     func signInWithLinkedIn() async throws {
         logger.info("Attempting user sign in with LinkedIn")
         do {
-            // Use the configured Supabase URL instead of hardcoding it
-            let redirectURL = Secrets.supabaseUrl.appendingPathComponent("/auth/v1/callback")
-            logger.info("Using redirect URL: \(redirectURL.absoluteString)")
+            // Use custom deep link URL for OAuth login callback
+            let redirectURL = URL(string: "enigmate://login-callback")!
+            logger.info("Using OAuth login redirect URL: \(redirectURL.absoluteString)")
             
             _ = try await client.auth.signInWithOAuth(
                 provider: .linkedinOIDC,
@@ -209,9 +209,9 @@ actor SupabaseService {
     func signInWithX() async throws {
         logger.info("Attempting user sign in with Twitter")
         do {
-            // Use the configured Supabase URL instead of hardcoding it
-            let redirectURL = Secrets.supabaseUrl.appendingPathComponent("/auth/v1/callback")
-            logger.info("Using redirect URL: \(redirectURL.absoluteString)")
+            // Use custom deep link URL for OAuth login callback
+            let redirectURL = URL(string: "enigmate://login-callback")!
+            logger.info("Using OAuth login redirect URL: \(redirectURL.absoluteString)")
             
             _ = try await client.auth.signInWithOAuth(
                 provider: .twitter,
@@ -245,7 +245,14 @@ actor SupabaseService {
     func resetPassword(email: String) async throws {
         logger.info("Attempting to reset password for email: \(email, privacy: .private)")
         do {
-            try await client.auth.resetPasswordForEmail(email)
+            // Use custom deep link URL for password reset callback
+            let redirectURL = URL(string: "enigmate://password-reset")!
+            logger.info("Using password reset redirect URL: \(redirectURL.absoluteString)")
+            
+            try await client.auth.resetPasswordForEmail(
+                email,
+                redirectTo: redirectURL
+            )
             logger.info("Password reset email sent successfully to: \(email, privacy: .private)")
         } catch {
             logger.error("Password reset failed for email: \(email, privacy: .private), error: \(error.localizedDescription)")
@@ -253,17 +260,36 @@ actor SupabaseService {
         }
     }
 
-    /// Handles the OAuth callback URL after social sign-in
-    /// This method should be called when the app receives the callback URL from the OAuth provider
-    func handleOAuthCallback(_ url: URL) async throws {
-        logger.info("Handling OAuth callback URL")
-        do {
-            // Use the configured Supabase URL instead of hardcoding it
+    /// Handles callback URLs from authentication flows (OAuth login or password reset)
+    /// This method should be called when the app receives callback URLs from Supabase
+    func handleAuthCallback(_ url: URL) async throws {
+        logger.info("Handling auth callback URL: \(url)")
+        
+        // Determine the type of callback based on the URL path
+        let urlString = url.absoluteString
+        
+        if urlString.contains("login-callback") {
+            logger.info("Processing OAuth login callback")
+            do {
+                try await client.auth.session(from: url)
+                logger.info("OAuth login callback processed successfully")
+            } catch {
+                logger.error("Failed to process OAuth login callback: \(error.localizedDescription)")
+                throw error
+            }
+        } else if urlString.contains("password-reset") {
+            logger.info("Processing password reset callback")
+            do {
+                try await client.auth.session(from: url)
+                logger.info("Password reset callback processed successfully")
+            } catch {
+                logger.error("Failed to process password reset callback: \(error.localizedDescription)")
+                throw error
+            }
+        } else {
+            logger.warning("Unknown callback URL type: \(url)")
+            // Still try to process it as a generic auth callback
             try await client.auth.session(from: url)
-            logger.info("OAuth callback processed successfully with url: \(url)")
-        } catch {
-            logger.error("Failed to process OAuth callback: \(error.localizedDescription)")
-            throw error
         }
     }
 
