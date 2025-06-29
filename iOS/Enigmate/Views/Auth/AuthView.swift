@@ -8,43 +8,119 @@
 import SwiftUI
 
 struct AuthView: View {
-
     @Environment(\.supabase) private var supabase
-    @State private var email = ""
-    @State private var password = ""
     @State private var errorMessage: String?
-
+    @State private var showEmailAuth = false
+    
     var body: some View {
-        VStack(spacing: 24) {
-            TextField("Email", text: $email)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-            SecureField("Password", text: $password)
+        // Use ZStack to layer background gradient behind content
+        ZStack {
+            // Background gradient layer
+            backgroundGradient
+            
+            // Content layer
+            VStack(alignment: .center, spacing: 32) {
+                // Add top spacer to push content toward center
+                //Spacer()
+                
+                VStack(spacing: 16) {
+                    Image("TransparentAppIcon")
+                        .resizable()
+                        .frame(width: 128, height: 128)
 
-            Button("Connect") {
-                Task {
-                    do   { try await supabase!.signIn(email: email, password: password) }
-                    catch { errorMessage = error.localizedDescription }
+                    Text("Enigmate")
+                        .font(.sfCompactRounded(fontWeight: .black, fontSize: 64))
+                        .foregroundColor(Color.primaryText)
+                    
+                    Text("1 riddle a day. 100 days.\nYou vs the World.")
+                        .font(.sfCompactRounded(fontStyle: .title2))
+                        .foregroundColor(Color.primaryText.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
                 }
-            }
-            if let msg = errorMessage {
-                Text(msg).foregroundColor(.red)
-            }
-
-            Button("Create account") {
-                Task {
-                    do   { try await supabase!.signUp(email: email, password: password) }
-                    catch { errorMessage = error.localizedDescription }
+                
+                // Authentication options
+                VStack(spacing: 16) {
+                    // LinkedIn sign-in button
+                    AuthButton(
+                        title: "Continue with LinkedIn",
+                        iconName: "LinkedInIcon",
+                        backgroundColor: Color.linkedIn,
+                        foregroundColor: .white
+                    ) {
+                        signInWithLinkedIn()
+                    }
+                    
+                    // X (Twitter) sign-in button  
+                    AuthButton(
+                        title: "Continue with X",
+                        iconName: "XIcon",
+                        backgroundColor: .black,
+                        foregroundColor: .white
+                    ) {
+                        signInWithX()
+                    }
+                    
+                    // Email sign-in button
+                    AuthButton(
+                        title: "Continue with Email",
+                        iconName: "envelope.fill",
+                        backgroundColor: Color.white,
+                        foregroundColor: .black
+                    ) {
+                        showEmailAuth = true
+                    }
                 }
+                
+                // Error message display
+                if let errorMessage = errorMessage {
+                    Text(errorMessage)
+                        .foregroundColor(.red.opacity(0.9)) // Adjusted red for better visibility
+                        .font(.sfCompactRounded(fontStyle: .caption))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .transition(.opacity)
+                }
+                
+                // Add bottom spacer to balance the layout
+                //Spacer()
             }
-
-            Button("Sign in with LinkedIn") {
-                Task {
-                    do   { try await supabase!.signInWithLinkedIn() }
-                    catch { errorMessage = error.localizedDescription }
+            .padding(.horizontal, 24)
+        }
+        .sheet(isPresented: $showEmailAuth) {
+            EmailAuthView()
+        }
+    }
+    
+    // MARK: - Authentication Methods
+    
+    /// Handle LinkedIn sign-in
+    private func signInWithLinkedIn() {
+        errorMessage = nil
+        
+        Task {
+            do {
+                try await supabase?.signInWithLinkedIn()
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to sign in with LinkedIn: \(error.localizedDescription)"
                 }
             }
         }
-        .padding()
+    }
+    
+    /// Handle X (Twitter) sign-in
+    private func signInWithX() {
+        errorMessage = nil
+        
+        Task {
+            do {
+                try await supabase?.signInWithX()
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to sign in with X: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 }

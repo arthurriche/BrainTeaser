@@ -14,7 +14,7 @@ enum Secrets {
     
     /// Development flag to switch between local and production Supabase
     /// Set to true to use local Supabase instance, false for production
-    private static let useLocalSupabase = true
+    private static let useLocalSupabase = false
     
     /// Private dictionary that loads configuration from Secrets.plist
     /// This is a computed property that runs once when first accessed

@@ -6,12 +6,28 @@
 //
 
 import SwiftUI
+import OSLog
 
 @main
 struct EnigmateApp: App {
     // State to hold the SupabaseService instance
     @State private var supabaseService: SupabaseService? = nil
 
+    let logger = Logger(subsystem: "com.clementmaubon.enigmate", category: "main")
+    
+//    init() {
+//        do {
+//            for family in UIFont.familyNames.sorted() {
+//                print("▶︎ Family: \(family)")
+//                for name in UIFont.fontNames(forFamilyName: family).sorted() {
+//                    print("    - \(name)")
+//                }
+//            }
+//        } catch {
+//            fatalError("Could not initialize the model container: \(error)")
+//        }
+//    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -19,11 +35,22 @@ struct EnigmateApp: App {
                 // Asynchronously initialize SupabaseService on appear
                 .task {
                     do {
-                        let service = try await SupabaseService.create()
-                        supabaseService = service
+                        supabaseService = try await SupabaseService.create()
                     } catch {
-                        // Log error but don't crash the app
-                        print("Failed to initialize SupabaseService: \(error.localizedDescription)")
+                        logger.error("Failed to initialize Supabase: \(error.localizedDescription)")
+                    }
+                }
+                // Handle deep links for OAuth
+                .onOpenURL { url in
+                    // Handle the OAuth callback URL
+                    if url.scheme == "enigmate" {
+                        Task {
+                            do {
+                                try await supabaseService?.handleOAuthCallback(url)
+                            } catch {
+                                logger.error("Error handling OAuth callback: \(error.localizedDescription)")
+                            }
+                        }
                     }
                 }
         }

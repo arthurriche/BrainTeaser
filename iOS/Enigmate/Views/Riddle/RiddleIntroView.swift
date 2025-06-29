@@ -12,19 +12,28 @@ struct RiddleIntroView: View {
     @State private var errorMessage: String? = nil
 
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-            Button("Sign out") {
-                Task {
-                    do   { try await supabase!.signOut() }
-                    catch { errorMessage = error.localizedDescription }
+        // Use ZStack to layer background gradient behind content
+        ZStack {
+            // Background gradient layer
+            backgroundGradient
+            
+            // Content layer
+            VStack {
+                Image(systemName: "globe")
+                    .imageScale(.large)
+                    .foregroundStyle(Color.primaryText)
+                Text("Hello, world!")
+                    .foregroundColor(Color.primaryText)
+                Button("Sign out") {
+                    Task {
+                        do   { try await supabase!.signOut() }
+                        catch { errorMessage = error.localizedDescription }
+                    }
                 }
+                .foregroundColor(Color.primaryText)
             }
+            .padding()
         }
-        .padding()
     }
 }
 

@@ -15,20 +15,30 @@ struct RiddleView: View {
     @State private var loading = true
 
     var body: some View {
-        Group {
-            if loading {
-                ProgressView("Chargement…")
-            } else if let riddle, let image {
-                VStack(spacing: 16) {
-                    image
-                        .resizable()
-                        .scaledToFit()
-                    Text(riddle.prompt)
-                        .font(.headline)
+        // Use ZStack to layer background gradient behind content
+        ZStack {
+            // Background gradient layer
+            backgroundGradient
+            
+            // Content layer
+            Group {
+                if loading {
+                    ProgressView("Chargement…")
+                        .foregroundColor(Color.primaryText)
+                } else if let riddle, let image {
+                    VStack(spacing: 16) {
+                        image
+                            .resizable()
+                            .scaledToFit()
+                        Text(riddle.prompt)
+                            .font(.sfCompactRounded(fontStyle: .headline))
+                            .foregroundColor(Color.primaryText)
+                    }
+                    .padding()
+                } else {
+                    Text("No riddle today")
+                        .foregroundColor(Color.primaryText)
                 }
-                .padding()
-            } else {
-                Text("Aucune énigme aujourd’hui")
             }
         }
         .task { await load() }

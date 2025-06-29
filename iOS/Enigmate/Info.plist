@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>enigmate</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>SF-Compact-Rounded-Ultralight.otf</string>
+		<string>SF-Compact-Rounded-Thin.otf</string>
+		<string>SF-Compact-Rounded-Light.otf</string>
+		<string>SF-Compact-Rounded-Regular.otf</string>
+		<string>SF-Compact-Rounded-Medium.otf</string>
+		<string>SF-Compact-Rounded-Semibold.otf</string>
+		<string>SF-Compact-Rounded-Bold.otf</string>
+		<string>SF-Compact-Rounded-Heavy.otf</string>
+		<string>SF-Compact-Rounded-Black.otf</string>
+	</array>
+</dict>
+</plist>

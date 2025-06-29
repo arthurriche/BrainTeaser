@@ -158,10 +158,10 @@ actor SupabaseService {
 
     /// Registers a new user account with email and password
     /// Throws an error if registration fails (invalid email, weak password, etc.)
-    func signUp(email: String, password: String) async throws {
+    func signUp(email: String, password: String, data: [String: AnyJSON]? = nil) async throws {
         logger.info("Attempting user sign up for email: \(email, privacy: .private)")
         do {
-            _ = try await client.auth.signUp(email: email, password: password)
+            _ = try await client.auth.signUp(email: email, password: password, data: data)
             logger.info("User sign up successful for email: \(email, privacy: .private)")
         } catch {
             logger.error("User sign up failed for email: \(email, privacy: .private), error: \(error.localizedDescription)")
@@ -186,13 +186,44 @@ actor SupabaseService {
     func signInWithLinkedIn() async throws {
         logger.info("Attempting user sign in with LinkedIn")
         do {
+            // Use the configured Supabase URL instead of hardcoding it
+            let redirectURL = Secrets.supabaseUrl.appendingPathComponent("/auth/v1/callback")
+            logger.info("Using redirect URL: \(redirectURL.absoluteString)")
+            
             _ = try await client.auth.signInWithOAuth(
-                provider: .linkedin,
-        redirectTo: URL(string: "https://psziiemacrqukdutwvic.supabase.co/auth/v1/callback"),
-        scopes: "r_liteprofile r_emailaddress"
+                provider: .linkedinOIDC,
+                redirectTo: redirectURL,
+                scopes: "openid profile email"
             ) { (session: ASWebAuthenticationSession) in
-                logger.info("User sign in with LinkedIn successful")
+                session.presentationContextProvider = nil // Allow system to handle presentation
+                logger.info("LinkedIn OAuth session configured")
             }
+            logger.info("User sign in with LinkedIn initiated successfully")
+        } catch {
+            logger.error("User sign in with LinkedIn failed: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Signs in the current user with Twitter (X)
+    func signInWithX() async throws {
+        logger.info("Attempting user sign in with Twitter")
+        do {
+            // Use the configured Supabase URL instead of hardcoding it
+            let redirectURL = Secrets.supabaseUrl.appendingPathComponent("/auth/v1/callback")
+            logger.info("Using redirect URL: \(redirectURL.absoluteString)")
+            
+            _ = try await client.auth.signInWithOAuth(
+                provider: .twitter,
+                redirectTo: redirectURL
+            ) { (session: ASWebAuthenticationSession) in
+                session.presentationContextProvider = nil // Allow system to handle presentation
+                logger.info("Twitter OAuth session configured")
+            }
+            logger.info("User sign in with Twitter initiated successfully")
+        } catch {
+            logger.error("User sign in with Twitter failed: \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -205,6 +236,33 @@ actor SupabaseService {
             logger.info("User sign out successful")
         } catch {
             logger.error("User sign out failed: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Initiates password reset flow for the specified email address
+    /// This will send a password reset email to the provided email address
+    func resetPassword(email: String) async throws {
+        logger.info("Attempting to reset password for email: \(email, privacy: .private)")
+        do {
+            try await client.auth.resetPasswordForEmail(email)
+            logger.info("Password reset email sent successfully to: \(email, privacy: .private)")
+        } catch {
+            logger.error("Password reset failed for email: \(email, privacy: .private), error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Handles the OAuth callback URL after social sign-in
+    /// This method should be called when the app receives the callback URL from the OAuth provider
+    func handleOAuthCallback(_ url: URL) async throws {
+        logger.info("Handling OAuth callback URL")
+        do {
+            // Use the configured Supabase URL instead of hardcoding it
+            try await client.auth.session(from: url)
+            logger.info("OAuth callback processed successfully with url: \(url)")
+        } catch {
+            logger.error("Failed to process OAuth callback: \(error.localizedDescription)")
             throw error
         }
     }
