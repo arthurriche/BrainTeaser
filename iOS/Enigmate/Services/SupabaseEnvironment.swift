@@ -25,3 +25,15 @@ extension EnvironmentValues {
         set { self[SupabaseKey.self] = newValue } // set the value in the environment
     }
 }
+
+// Environment key for password reset sheet state
+private struct ShowPasswordResetKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+
+extension EnvironmentValues {
+    var showPasswordReset: Binding<Bool> {
+        get { self[ShowPasswordResetKey.self] }
+        set { self[ShowPasswordResetKey.self] = newValue }
+    }
+}

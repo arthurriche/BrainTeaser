@@ -12,6 +12,7 @@ import OSLog
 struct EnigmateApp: App {
     // State to hold the SupabaseService instance
     @State private var supabaseService: SupabaseService? = nil
+    @State private var showPasswordReset = false
 
     let logger = Logger(subsystem: "com.clementmaubon.enigmate", category: "main")
     
@@ -32,6 +33,7 @@ struct EnigmateApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.supabase, supabaseService)
+                .environment(\.showPasswordReset, $showPasswordReset)
                 // Asynchronously initialize SupabaseService on appear
                 .task {
                     do {
@@ -46,7 +48,12 @@ struct EnigmateApp: App {
                     if url.scheme == "enigmate" {
                         Task {
                             do {
-                                try await supabaseService?.handleAuthCallback(url)
+                                let callbackType = try await supabaseService?.handleAuthCallback(url)
+                                await MainActor.run {
+                                    if callbackType == .passwordReset {
+                                        showPasswordReset = true
+                                    }
+                                }
                             } catch {
                                 logger.error("Error handling auth callback: \(error.localizedDescription)")
                             }

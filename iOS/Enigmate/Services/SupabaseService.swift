@@ -18,6 +18,7 @@
 
 import Foundation
 import Supabase
+import Auth
 import os.log
 import AuthenticationServices
 
@@ -260,9 +261,23 @@ actor SupabaseService {
         }
     }
 
+    /// Updates the current authenticated user's password
+    /// This method requires the user to be authenticated (e.g., after clicking reset link)
+    func updatePassword(newPassword: String) async throws {
+        logger.info("Attempting to update password for current user")
+        do {
+            try await client.auth.update(user: UserAttributes(password: newPassword))
+            logger.info("Password update successful")
+        } catch {
+            logger.error("Password update failed: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
     /// Handles callback URLs from authentication flows (OAuth login or password reset)
     /// This method should be called when the app receives callback URLs from Supabase
-    func handleAuthCallback(_ url: URL) async throws {
+    /// Returns the callback type for the UI to handle appropriately
+    func handleAuthCallback(_ url: URL) async throws -> AuthCallbackType {
         logger.info("Handling auth callback URL: \(url)")
         
         // Determine the type of callback based on the URL path
@@ -273,6 +288,7 @@ actor SupabaseService {
             do {
                 try await client.auth.session(from: url)
                 logger.info("OAuth login callback processed successfully")
+                return .login
             } catch {
                 logger.error("Failed to process OAuth login callback: \(error.localizedDescription)")
                 throw error
@@ -282,6 +298,7 @@ actor SupabaseService {
             do {
                 try await client.auth.session(from: url)
                 logger.info("Password reset callback processed successfully")
+                return .passwordReset
             } catch {
                 logger.error("Failed to process password reset callback: \(error.localizedDescription)")
                 throw error
@@ -290,7 +307,14 @@ actor SupabaseService {
             logger.warning("Unknown callback URL type: \(url)")
             // Still try to process it as a generic auth callback
             try await client.auth.session(from: url)
+            return .login // Default to login type for unknown callbacks
         }
+    }
+
+    /// Enum representing different types of authentication callbacks
+    enum AuthCallbackType {
+        case login
+        case passwordReset
     }
 
     // MARK: – Database Operations

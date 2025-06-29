@@ -73,8 +73,8 @@ struct AuthView: View {
                 }
                 
                 // Error message display
-                if let errorMessage = errorMessage {
-                    Text(errorMessage)
+                if errorMessage != nil {
+                    Text("Login failed. Please try again.")
                         .foregroundColor(Color.matchingRed.opacity(0.9)) // Adjusted red for better visibility
                         .font(.sfCompactRounded(fontStyle: .caption))
                         .multilineTextAlignment(.center)

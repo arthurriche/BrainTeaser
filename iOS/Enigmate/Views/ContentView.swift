@@ -10,6 +10,7 @@ import Auth
 
 struct ContentView: View {
     @Environment(\.supabase) private var supabase
+    @Environment(\.showPasswordReset) private var showPasswordReset
     @State private var session: Session? = nil
 
     var body: some View {
@@ -41,6 +42,9 @@ struct ContentView: View {
                         .foregroundColor(Color.primaryText) // Ensure visibility on gradient background
                 }
             }
+        }
+        .sheet(isPresented: showPasswordReset) {
+            PasswordResetView()
         }
     }
 }
