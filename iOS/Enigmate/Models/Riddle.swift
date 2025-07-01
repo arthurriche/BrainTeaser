@@ -8,8 +8,36 @@
 import Foundation
 
 struct Riddle: Identifiable, Encodable, Decodable, Equatable {
-    let id: UUID
+    let id: Int
+    let title: String
     let date: Date
-    let imageUrl: String
-    let prompt: String
+    let question: String
+    let answer: String
+    let image: String
+    let duration: Int? // Duration in minutes (optional since it's NULL in DB)
+    let difficulty: Int? // 1: Easy, 2: Medium, 3: Hard, 4: Very Hard (optional since it's NULL in DB)
+    let hint1: String?
+    let hint2: String?
+    let hint3: String?
+    
+
+    func getDifficultyString() -> String {
+        guard let difficulty = difficulty else { return "Unknown" }
+        switch difficulty {
+        case 1:
+            return "Easy"
+        case 2:
+            return "Medium"
+        case 3:
+            return "Hard"
+        case 4:
+            return "Very Hard"
+        default:
+            return "Unknown"
+        }
+    }
+
+    func getImageName() -> String {
+        return "riddle-\(id).png"
+    }
 }

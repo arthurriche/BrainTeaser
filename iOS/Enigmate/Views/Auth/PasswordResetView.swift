@@ -77,7 +77,7 @@ struct PasswordResetView: View {
                         }
                         
                         // Reset password button
-                        AuthButton(
+                        MainButton(
                             title: isLoading ? "Updating Password..." : "Update Password",
                             backgroundColor: Color.accent,
                             foregroundColor: Color.primaryText

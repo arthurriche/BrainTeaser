@@ -34,7 +34,7 @@ struct EnigmateApp: App {
             ContentView()
                 .environment(\.supabase, supabaseService)
                 .environment(\.showPasswordReset, $showPasswordReset)
-                // Asynchronously initialize SupabaseService on appear
+        // Asynchronously initialize SupabaseService on appear
                 .task {
                     do {
                         supabaseService = try await SupabaseService.create()

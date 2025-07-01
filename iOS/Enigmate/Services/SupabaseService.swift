@@ -322,31 +322,41 @@ actor SupabaseService {
     /// Fetches today's riddle from the database
     /// 
     /// This method:
-    /// 1. Gets today's date in ISO8601 format (YYYY-MM-DD)
-    /// 2. Queries the "riddles" table for a record matching today's date
+    /// 1. Calculates the current "riddle day" based on Paris Time (riddles release at 10:00 Paris time)
+    /// 2. Queries the "riddles" table for a record matching the current riddle day
     /// 3. Returns the riddle if found, nil if no riddle exists for today
     /// 
-    /// The query uses .single() which expects exactly one result and throws if none or multiple found
+    /// Riddles are released at 10:00 Paris time, so users worldwide get the same riddle
+    /// based on when it's been released in Paris time, not their local timezone
     func todaysRiddle() async throws -> Riddle? {
-        // Format today's date as ISO8601 string (e.g., "2025-01-27")
-        let today = ISO8601DateFormatter().string(from: .now)
-        logger.info("Fetching today's riddle for date: \(today)")
+        let calendar = Calendar.current
+        let now = Date()
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        logger.info("Fetching riddle between \(yesterday) and \(tomorrow)")
 
         do {
-            // Query the database for today's riddle using the new API
-            let riddle: [Riddle] = try await client
+            // Now try to get just the first riddle without any conditions
+            let response: [Riddle] = try await client
                 .from("riddles")           // Target table
                 .select()                  // Select all columns
-                .eq("date", value: today)  // Where date equals today
-                .single()                  // Expect exactly one result
+                .gt("date", value: yesterday)     // Greater than or equal to start of riddle day
+                .lte("date", value: now)        // Less than start of next day
+                .limit(1)                  // Limit to one result
                 .execute()
-                .value// Execute the query
+                .value                     // Execute the query
 
-            // Decode the response into a Riddle object
-            logger.info("Successfully fetched today's riddle with ID: \(riddle[0].id)")
-            return riddle[0]
+            // Return the first riddle if found, nil if array is empty
+            if let riddle = response.first {
+                logger.info("Successfully fetched riddle with ID: \(riddle.id), date: \(riddle.date)")
+                return riddle
+            } else {
+                logger.info("No riddle found between \(yesterday) and \(now)")
+                return nil
+            }
         } catch {
-            logger.error("Failed to fetch today's riddle for date \(today): \(error.localizedDescription)")
+            logger.error("Failed to fetch riddle: \(error.localizedDescription)")
+            logger.error("Full error: \(error)")
             throw error
         }
     }
@@ -361,17 +371,17 @@ actor SupabaseService {
     /// 
     /// - Parameter path: The file path within the bucket (e.g., "riddle1.jpg")
     /// - Returns: Raw image data that can be converted to UIImage or SwiftUI Image
-    func downloadPuzzleImageData(path: String) async throws -> Data {
-        logger.info("Downloading puzzle image from path: \(path)")
+    func downloadPuzzleImageData(id: String) async throws -> Data {
+        logger.info("Downloading puzzle image from path: \(id)")
         do {
             let imageData = try await client.storage
                 .from("riddle-images")     // Target storage bucket
-                .download(path: path)      // Download the file at the specified path
+                .download(path: id)      // Download the file at the specified path
             
-            logger.info("Successfully downloaded puzzle image from path: \(path), size: \(imageData.count) bytes")
+            logger.info("Successfully downloaded puzzle image from path: \(id), size: \(imageData.count) bytes")
             return imageData
         } catch {
-            logger.error("Failed to download puzzle image from path \(path): \(error.localizedDescription)")
+            logger.error("Failed to download puzzle image from path \(id): \(error.localizedDescription)")
             throw error
         }
     }

@@ -158,7 +158,7 @@ struct EmailAuthView: View {
                         }
                         
                         // Action button
-                        AuthButton(
+                        MainButton(
                             title: isLoading ? (authMode == .signIn ? "Signing In..." : "Creating Account...") : (authMode == .signIn ? "Sign In" : "Sign Up"),
                             backgroundColor: Color.accent,
                             foregroundColor: Color.primaryText
@@ -356,7 +356,7 @@ struct EmailAuthView: View {
             .padding(.bottom, 8)
             
             // Action button
-            AuthButton(
+            MainButton(
                 title: isLoading ? (authMode == .signIn ? "Signing In..." : "Creating Account...") : (authMode == .signIn ? "Sign In" : "Sign Up"),
                 backgroundColor: Color.accent,
                 foregroundColor: Color.primaryText

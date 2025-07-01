@@ -21,25 +21,25 @@ struct RiddleView: View {
             backgroundGradient
             
             // Content layer
-            Group {
-                if loading {
-                    ProgressView("Chargement…")
-                        .foregroundColor(Color.primaryText)
-                } else if let riddle, let image {
-                    VStack(spacing: 16) {
-                        image
-                            .resizable()
-                            .scaledToFit()
-                        Text(riddle.prompt)
-                            .font(.sfCompactRounded(fontStyle: .headline))
-                            .foregroundColor(Color.primaryText)
-                    }
-                    .padding()
-                } else {
-                    Text("No riddle today")
-                        .foregroundColor(Color.primaryText)
-                }
-            }
+//            Group {
+//                if loading {
+//                    ProgressView("Chargement…")
+//                        .foregroundColor(Color.primaryText)
+//                } else if let riddle, let image {
+//                    VStack(spacing: 16) {
+//                        image
+//                            .resizable()
+//                            .scaledToFit()
+//                        Text(riddle.prompt)
+//                            .font(.sfCompactRounded(fontStyle: .headline))
+//                            .foregroundColor(Color.primaryText)
+//                    }
+//                    .padding()
+//                } else {
+//                    Text("No riddle today")
+//                        .foregroundColor(Color.primaryText)
+//                }
+//            }
         }
         .task { await load() }
     }
@@ -49,7 +49,7 @@ struct RiddleView: View {
         do {
             if let ridd = try await supabase!.todaysRiddle() {
                 riddle = ridd
-                let imageData = try await supabase!.downloadPuzzleImageData(path: ridd.imageUrl)
+                let imageData = try await supabase!.downloadPuzzleImageData(id: riddle!.getImageName())   
                 image = Image(uiImage: UIImage(data: imageData)!)
             }
         } catch {

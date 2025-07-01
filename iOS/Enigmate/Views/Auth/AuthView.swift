@@ -42,31 +42,34 @@ struct AuthView: View {
                 // Authentication options
                 VStack(spacing: 16) {
                     // LinkedIn sign-in button
-                    AuthButton(
+                    MainButton(
                         title: "Continue with LinkedIn",
                         iconName: "LinkedInIcon",
                         backgroundColor: Color.linkedIn,
-                        foregroundColor: .white
+                        foregroundColor: .white,
+                        size: .medium
                     ) {
                         signInWithLinkedIn()
                     }
                     
                     // X (Twitter) sign-in button  
-                    AuthButton(
+                    MainButton(
                         title: "Continue with X",
                         iconName: "XIcon",
                         backgroundColor: .black,
-                        foregroundColor: .white
+                        foregroundColor: .white,
+                        size: .medium
                     ) {
                         signInWithX()
                     }
                     
                     // Email sign-in button
-                    AuthButton(
+                    MainButton(
                         title: "Continue with Email",
                         iconName: "envelope.fill",
                         backgroundColor: Color.white,
-                        foregroundColor: .black
+                        foregroundColor: .black,
+                        size: .medium
                     ) {
                         showEmailAuth = true
                     }
