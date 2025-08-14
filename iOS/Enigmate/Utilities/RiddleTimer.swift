@@ -10,6 +10,7 @@ import Combine
 
 /// A reusable timer class for managing riddle countdown functionality
 @MainActor
+// Replace with @Observable
 class RiddleTimer: ObservableObject {
     
     // MARK: - Published Properties

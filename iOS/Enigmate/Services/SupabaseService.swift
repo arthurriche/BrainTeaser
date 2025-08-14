@@ -206,27 +206,7 @@ actor SupabaseService {
         }
     }
 
-    /// Signs in the current user with Twitter (X)
-    func signInWithX() async throws {
-        logger.info("Attempting user sign in with Twitter")
-        do {
-            // Use custom deep link URL for OAuth login callback
-            let redirectURL = URL(string: "enigmate://login-callback")!
-            logger.info("Using OAuth login redirect URL: \(redirectURL.absoluteString)")
-            
-            _ = try await client.auth.signInWithOAuth(
-                provider: .twitter,
-                redirectTo: redirectURL
-            ) { (session: ASWebAuthenticationSession) in
-                session.presentationContextProvider = nil // Allow system to handle presentation
-                logger.info("Twitter OAuth session configured")
-            }
-            logger.info("User sign in with Twitter initiated successfully")
-        } catch {
-            logger.error("User sign in with Twitter failed: \(error.localizedDescription)")
-            throw error
-        }
-    }
+
 
     /// Signs out the current user and clears the session
     /// This will trigger auth state change notifications to all listeners

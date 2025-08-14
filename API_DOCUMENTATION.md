@@ -148,17 +148,7 @@ do {
 }
 ```
 
-##### `signInWithX() async throws`
-Initiates Twitter/X OAuth authentication.
 
-```swift
-do {
-    try await supabaseService.signInWithX()
-    // OAuth flow initiated, user will be redirected to Twitter
-} catch {
-    print("Twitter sign-in failed: \(error.localizedDescription)")
-}
-```
 
 ##### `signOut() async throws`
 Signs out the current user.
@@ -471,7 +461,6 @@ var body: some View {
 
 ##### Features
 - LinkedIn OAuth integration
-- Twitter/X OAuth integration  
 - Email authentication option
 - Error message display
 - Responsive layout with brand identity

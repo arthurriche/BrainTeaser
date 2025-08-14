@@ -52,17 +52,6 @@ struct AuthView: View {
                         signInWithLinkedIn()
                     }
                     
-                    // X (Twitter) sign-in button  
-                    MainButton(
-                        title: "Continue with X",
-                        iconName: "XIcon",
-                        backgroundColor: .black,
-                        foregroundColor: .white,
-                        size: .medium
-                    ) {
-                        signInWithX()
-                    }
-                    
                     // Email sign-in button
                     MainButton(
                         title: "Continue with Email",
@@ -112,18 +101,5 @@ struct AuthView: View {
         }
     }
     
-    /// Handle X (Twitter) sign-in
-    private func signInWithX() {
-        errorMessage = nil
-        
-        Task {
-            do {
-                try await supabase?.signInWithX()
-            } catch {
-                await MainActor.run {
-                    errorMessage = "Failed to sign in with X: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
+
 }

@@ -25,13 +25,11 @@ struct Riddle: Identifiable, Encodable, Decodable, Equatable {
         guard let difficulty = difficulty else { return "Unknown" }
         switch difficulty {
         case 1:
-            return "Easy"
+            return "Novice"
         case 2:
-            return "Medium"
+            return "Practiced"
         case 3:
-            return "Hard"
-        case 4:
-            return "Very Hard"
+            return "Expert"
         default:
             return "Unknown"
         }
