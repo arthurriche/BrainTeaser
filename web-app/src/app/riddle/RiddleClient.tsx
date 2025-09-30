@@ -1,16 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Metadata } from "next";
 import { Loader2, TriangleAlert } from "lucide-react";
 
 import { TimerPanel } from "@/components/riddle/TimerPanel";
 import { ConversationPanel, type ChatMessage } from "@/components/riddle/ConversationPanel";
 import { useCountdown } from "@/hooks/useCountdown";
-
-export const metadata: Metadata = {
-  title: "Enigmate — Résolution",
-};
 
 interface RiddlePayload {
   id: number;
@@ -30,7 +25,7 @@ const DIFFICULTY_MAP: Record<number, string> = {
 
 const DEFAULT_DURATION = 45 * 60;
 
-export default function RiddlePage() {
+export function RiddleClient() {
   const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
