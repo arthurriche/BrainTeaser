@@ -71,7 +71,10 @@ export async function POST(request: Request) {
     } = await supabase.auth.getSession();
 
     if (!session) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+      return NextResponse.json({
+        error: "Connecte-toi pour enregistrer ta tentative.",
+        requiresAuth: true,
+      });
     }
 
     const { data: riddle, error: riddleError } = await supabase

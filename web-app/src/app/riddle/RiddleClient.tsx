@@ -32,6 +32,7 @@ interface ScoreResult {
   rankingPercent: number;
   beatenPlayers: number;
   totalPlayers: number;
+  hints?: string[];
 }
 
 const DIFFICULTY_MAP: Record<number, string> = {
@@ -78,6 +79,7 @@ const mergeScoreData = (
   rankingPercent: overrides.rankingPercent,
   beatenPlayers: overrides.beatenPlayers,
   totalPlayers: overrides.totalPlayers,
+  hints: overrides.hints ?? base?.hints ?? [],
 });
 
 export function RiddleClient() {
@@ -185,7 +187,15 @@ export function RiddleClient() {
         throw new Error(body || "Soumission impossible");
       }
 
-      const result = (await response.json()) as ScoreResult;
+      const data = await response.json();
+      if (data?.requiresAuth) {
+        setScoreResult(null);
+        setScoreboardError(data.error ?? 'Connecte-toi pour enregistrer ta tentative.');
+        setShowScoreboard(true);
+        setSubmittingAnswer(false);
+        return;
+      }
+      const result = data as ScoreResult;
       setAttemptsUsed((prev) => prev + 1);
       setScoreResult(result);
 
@@ -217,6 +227,12 @@ export function RiddleClient() {
         throw new Error(body || "Impossible de récupérer le classement");
       }
       const data = await response.json();
+      if (data?.requiresAuth) {
+        setScoreboardError(data.error ?? "Connecte-toi pour accéder au classement.");
+        setShowScoreboard(true);
+        setScoreboardLoading(false);
+        return;
+      }
       if (data?.hasScore) {
         const merged = mergeScoreData(scoreResult, {
           score: data.score ?? 0,
@@ -227,6 +243,7 @@ export function RiddleClient() {
           timeSpent: data.duration ?? countdownState.totalDuration,
           userMessages: data.msgCount ?? attemptsUsed,
           timeRemaining: scoreResult?.timeRemaining ?? 0,
+          hints: scoreResult?.hints ?? hints,
         });
         setScoreResult(merged);
         setShowScoreboard(true);
@@ -240,7 +257,7 @@ export function RiddleClient() {
     } finally {
       setScoreboardLoading(false);
     }
-  }, [riddle, scoreResult, revealedHints.length, countdownState.totalDuration, attemptsUsed]);
+  }, [riddle, scoreResult, revealedHints.length, countdownState.totalDuration, attemptsUsed, hints]);
 
   useEffect(() => {
     if (!showScoreboard && countdownState.timeRemaining === 0) {

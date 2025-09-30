@@ -25,7 +25,11 @@ export async function GET(request: Request) {
     } = await supabase.auth.getSession();
 
     if (!session) {
-      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+      return NextResponse.json({
+        error: "Connecte-toi pour accéder au classement.",
+        requiresAuth: true,
+        hasScore: false,
+      });
     }
 
     const { data: existingScore, error: scoreError } = await supabase
