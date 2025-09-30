@@ -2,16 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSupabase } from "@/components/providers/SupabaseProvider";
-
-interface RiddleTodayPayload {
+interface RiddlePayload {
   id: number;
   question: string;
   imageURL?: string;
-}
-
-interface RiddleDetails extends RiddleTodayPayload {
-  title?: string;
+  title?: string | null;
   duration?: number | null;
   difficulty?: number | null;
 }
@@ -38,9 +33,8 @@ const todayLabel = () =>
   }).format(new Date());
 
 export const RiddleIntro = () => {
-  const { supabase } = useSupabase();
   const router = useRouter();
-  const [riddle, setRiddle] = useState<RiddleDetails | null>(null);
+  const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,30 +46,18 @@ export const RiddleIntro = () => {
       setError(null);
 
       try {
-        const { data, error } = await supabase.functions.invoke<RiddleTodayPayload>(
-          "riddle_today"
-        );
+        const response = await fetch("/api/riddle-today", { cache: "no-store" });
 
-        if (error) throw error;
-        if (!data) {
-          setRiddle(null);
-          return;
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(body || "Impossible de charger l'énigme du jour.");
         }
 
-        const { data: detailData } = await supabase
-          .from("riddles")
-          .select("title, duration, difficulty")
-          .eq("id", data.id)
-          .maybeSingle();
+        const payload = (await response.json()) as RiddlePayload | null;
 
         if (aborted) return;
+        setRiddle(payload);
 
-        setRiddle({
-          ...data,
-          title: detailData?.title,
-          duration: detailData?.duration ?? null,
-          difficulty: detailData?.difficulty ?? null,
-        });
       } catch (err) {
         if (aborted) return;
         setError(
@@ -95,7 +77,7 @@ export const RiddleIntro = () => {
     return () => {
       aborted = true;
     };
-  }, [supabase]);
+  }, []);
 
   const difficulty = useMemo(() => {
     if (!riddle?.difficulty) return "À découvrir";
