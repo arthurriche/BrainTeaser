@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import OpenAI from "openai";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const NORMALIZE_REGEX = /[\s\p{P}\p{S}]+/gu;
 
@@ -11,6 +13,42 @@ const normalizeAnswer = (value: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .replace(NORMALIZE_REGEX, " ")
     .trim();
+
+type GenericSupabaseClient = SupabaseClient<unknown, "public", unknown>;
+
+const openaiApiKey = process.env.OPENAI_API_KEY;
+const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+
+const suggestWithLLM = async (question: string, answer: string, hints: string[], feedback: string) => {
+  if (!openaiApiKey) return feedback;
+  try {
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+    const completion = await openai.chat.completions.create({
+      model: openaiModel,
+      temperature: 0.6,
+      messages: [
+        {
+          role: "system",
+          content: "Tu es Le Maître. En une courte réponse, explique pourquoi la proposition ne suffit pas et suggère un angle à explorer sans dévoiler la solution.",
+        },
+        {
+          role: "user",
+          content: `Énigme : ${question}
+Réponse proposée : ${answer}
+Indices disponibles : ${hints.length ? hints.join(' | ') : 'aucun'}
+Feedback actuel : ${feedback}`.trim(),
+        },
+      ],
+    });
+    const suggestion = completion.choices[0]?.message?.content?.trim();
+    return suggestion ? `${feedback}
+
+Le Maître te souffle : ${suggestion}` : feedback;
+  } catch (error) {
+    console.error('OpenAI suggestion failed', error);
+    return feedback;
+  }
+};
 
 export async function POST(request: Request) {
   try {
@@ -26,8 +64,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
     }
 
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const cookieStore = await cookies();
+    const supabase: GenericSupabaseClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -38,13 +76,17 @@ export async function POST(request: Request) {
 
     const { data: riddle, error: riddleError } = await supabase
       .from("riddles")
-      .select("answer")
+      .select("question,answer,hint1,hint2,hint3")
       .eq("id", riddleId)
       .maybeSingle();
 
     if (riddleError || !riddle) {
       return NextResponse.json({ error: "Énigme introuvable" }, { status: 404 });
     }
+
+    const hints = Array.isArray(body?.hints)
+      ? body.hints.filter((hint: unknown): hint is string => typeof hint === 'string')
+      : [riddle.hint1, riddle.hint2, riddle.hint3].filter((hint): hint is string => Boolean(hint));
 
     const normalizedUserAnswer = normalizeAnswer(answer);
     const normalizedExpected = normalizeAnswer(riddle.answer ?? "");
@@ -67,6 +109,7 @@ export async function POST(request: Request) {
           score,
           duration: timeSpent,
           msg_count: userMessages,
+          hint_count: hintsUsed,
         },
         { onConflict: "user_id,riddle_id" },
       );
@@ -79,21 +122,36 @@ export async function POST(request: Request) {
     const totalResponse = await supabase
       .from("scores")
       .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId);
+      .eq("riddle_id", riddleId)
+      .gt("score", 0);
 
     const lowerResponse = await supabase
       .from("scores")
       .select("score", { count: "exact", head: true })
       .eq("riddle_id", riddleId)
+      .gt("score", 0)
       .lt("score", score);
+
+    const equalResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId)
+      .eq("score", score);
 
     const totalPlayers = totalResponse.count ?? 0;
     const beatenPlayers = lowerResponse.count ?? 0;
-    const rankingPercent = totalPlayers > 0 ? Math.round((beatenPlayers / totalPlayers) * 100) : 0;
+    const tiedPlayers = equalResponse.count ?? 0;
+    const rankingPercent = totalPlayers > 0
+      ? Math.round(((beatenPlayers + tiedPlayers / 2) / totalPlayers) * 100)
+      : 0;
 
-    const feedback = correct
+    let feedback = correct
       ? "Bravo ! Ta réponse est juste."
       : "La réponse proposée ne correspond pas. Précise certains points ou utilise un indice supplémentaire avant ta prochaine tentative.";
+
+    if (!correct) {
+      feedback = await suggestWithLLM(riddle.question ?? '', answer, hints, feedback);
+    }
 
     return NextResponse.json({
       correct,

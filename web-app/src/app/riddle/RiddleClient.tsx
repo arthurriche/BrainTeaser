@@ -206,6 +206,12 @@ export function RiddleClient() {
     setScoreboardError(null);
     try {
       const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}`, { cache: "no-store" });
+      if (response.status === 401) {
+        setScoreboardError('Connecte-toi pour accéder au classement.');
+        setShowScoreboard(true);
+        setScoreboardLoading(false);
+        return;
+      }
       if (!response.ok) {
         const body = await response.text();
         throw new Error(body || "Impossible de récupérer le classement");

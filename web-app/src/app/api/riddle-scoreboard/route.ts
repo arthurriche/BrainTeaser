@@ -1,9 +1,12 @@
 import { cookies } from "next/headers";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-const createClient = () => {
-  const cookieStore = cookies();
+type GenericSupabaseClient = SupabaseClient<unknown, "public", unknown>;
+
+const createClient = async (): Promise<GenericSupabaseClient> => {
+  const cookieStore = await cookies();
   return createRouteHandlerClient({ cookies: () => cookieStore });
 };
 
@@ -16,7 +19,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "riddleId requis" }, { status: 400 });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -43,17 +46,28 @@ export async function GET(request: Request) {
     const totalResponse = await supabase
       .from("scores")
       .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId);
+      .eq("riddle_id", riddleId)
+      .gt("score", 0);
 
     const lowerResponse = await supabase
       .from("scores")
       .select("score", { count: "exact", head: true })
       .eq("riddle_id", riddleId)
+      .gt("score", 0)
       .lt("score", existingScore.score ?? 0);
+
+    const equalResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId)
+      .eq("score", existingScore.score ?? 0);
 
     const totalPlayers = totalResponse.count ?? 0;
     const beatenPlayers = lowerResponse.count ?? 0;
-    const rankingPercent = totalPlayers > 0 ? Math.round((beatenPlayers / totalPlayers) * 100) : 0;
+    const tiedPlayers = equalResponse.count ?? 0;
+    const rankingPercent = totalPlayers > 0
+      ? Math.round(((beatenPlayers + tiedPlayers / 2) / totalPlayers) * 100)
+      : 0;
 
     return NextResponse.json({
       hasScore: true,
