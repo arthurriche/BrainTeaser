@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { TimerPanel } from "@/components/riddle/TimerPanel";
 import { ConversationPanel, type ChatMessage } from "@/components/riddle/ConversationPanel";
@@ -14,6 +16,7 @@ interface RiddlePayload {
   title?: string | null;
   duration?: number | null;
   difficulty?: number | null;
+  releaseDate?: string | null;
 }
 
 const DIFFICULTY_MAP: Record<number, string> = {
@@ -24,6 +27,13 @@ const DIFFICULTY_MAP: Record<number, string> = {
 };
 
 const DEFAULT_DURATION = 45 * 60;
+
+const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
 
 export function RiddleClient() {
   const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
@@ -70,6 +80,13 @@ export function RiddleClient() {
     if (!riddle?.difficulty) return "À confirmer";
     return DIFFICULTY_MAP[riddle.difficulty] ?? "À confirmer";
   }, [riddle?.difficulty]);
+
+  const releaseDateLabel = useMemo(() => {
+    if (!riddle?.releaseDate) return null;
+    const date = new Date(riddle.releaseDate);
+    if (Number.isNaN(date.getTime())) return null;
+    return DATE_FORMATTER.format(date);
+  }, [riddle?.releaseDate]);
 
   const placeholderPersistence = async (_messages: ChatMessage[]) => {
     // TODO: persistance Supabase (table `chats`) avec user + riddleId
@@ -120,8 +137,11 @@ export function RiddleClient() {
           </span>
         </h1>
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span className="rounded-full bg-muted px-3 py-1 font-medium">#{riddle.id}</span>
+          <span className="rounded-full bg-muted px-3 py-1 font-medium">Enigme n°{riddle.id}</span>
           <span className="rounded-full bg-primary/10 px-3 py-1 font-medium text-primary">{difficultyLabel}</span>
+          {releaseDateLabel && (
+            <span className="rounded-full bg-muted px-3 py-1 font-medium">{releaseDateLabel}</span>
+          )}
           <span className="rounded-full bg-muted px-3 py-1 font-medium">
             Durée cible : {(riddle.duration ?? DEFAULT_DURATION) / 60} min
           </span>
@@ -139,7 +159,9 @@ export function RiddleClient() {
 
           <article className="space-y-6 rounded-3xl border border-border bg-white p-10 text-lg leading-relaxed text-muted-foreground shadow-xl">
             <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Enoncé</p>
-            <p className="whitespace-pre-line text-foreground">{riddle.question}</p>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-slate max-w-none text-foreground">
+              {riddle.question}
+            </ReactMarkdown>
           </article>
 
           <section className="rounded-3xl border border-dashed border-primary/40 bg-primary/5 p-6 text-sm text-primary">

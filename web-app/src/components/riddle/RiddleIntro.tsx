@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 interface RiddlePayload {
   id: number;
   question: string;
@@ -9,6 +11,7 @@ interface RiddlePayload {
   title?: string | null;
   duration?: number | null;
   difficulty?: number | null;
+  releaseDate?: string | null;
 }
 
 const difficultyLabels: Record<number, string> = {
@@ -31,6 +34,13 @@ const todayLabel = () =>
     day: "numeric",
     month: "long",
   }).format(new Date());
+
+const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
 
 export const RiddleIntro = () => {
   const router = useRouter();
@@ -83,6 +93,13 @@ export const RiddleIntro = () => {
     if (!riddle?.difficulty) return "À découvrir";
     return difficultyLabels[riddle.difficulty] ?? "À découvrir";
   }, [riddle?.difficulty]);
+
+  const releaseDateLabel = useMemo(() => {
+    if (!riddle?.releaseDate) return null;
+    const date = new Date(riddle.releaseDate);
+    if (Number.isNaN(date.getTime())) return null;
+    return dateFormatter.format(date);
+  }, [riddle?.releaseDate]);
 
   if (loading) {
     return (
@@ -151,9 +168,9 @@ export const RiddleIntro = () => {
             {riddle.title ?? "Énigme mystère"}
           </h2>
 
-          <p className="whitespace-pre-line text-lg leading-relaxed text-muted-foreground">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-slate max-w-none text-lg leading-relaxed text-muted-foreground">
             {riddle.question}
-          </p>
+          </ReactMarkdown>
         </article>
 
         <aside className="space-y-6">
@@ -167,13 +184,15 @@ export const RiddleIntro = () => {
                 </dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt>Mode</dt>
-                <dd className="font-medium text-foreground">Solo + Maître</dd>
-              </div>
-              <div className="flex items-center justify-between">
                 <dt>Progression</dt>
-                <dd className="font-medium text-foreground">Jour actif</dd>
+                <dd className="font-medium text-foreground">Enigme n°{riddle.id}</dd>
               </div>
+              {releaseDateLabel && (
+                <div className="flex items-center justify-between">
+                  <dt>Date</dt>
+                  <dd className="font-medium text-foreground">{releaseDateLabel}</dd>
+                </div>
+              )}
             </dl>
           </div>
 

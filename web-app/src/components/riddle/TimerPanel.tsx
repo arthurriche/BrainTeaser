@@ -10,8 +10,6 @@ interface TimerPanelProps {
   autoStartSeconds?: number;
 }
 
-const CONTROL_BUTTON_STYLE = "rounded-xl border border-border px-4 py-2 text-sm font-semibold transition hover:bg-muted";
-
 export const TimerPanel = ({ state, controls, autoStartSeconds }: TimerPanelProps) => {
   const { timeRemaining, totalDuration, isActive, isFinished } = state;
   const { start } = controls;
@@ -42,7 +40,7 @@ export const TimerPanel = ({ state, controls, autoStartSeconds }: TimerPanelProp
             lowTime ? "bg-red-100 text-red-600" : "bg-primary/10 text-primary"
           )}
         >
-          {isFinished ? "Terminé" : lowTime ? "Temps critique" : isActive ? "En cours" : "En pause"}
+          {isFinished ? "Terminé" : lowTime ? "Temps critique" : isActive ? "En cours" : "Initialisation"}
         </span>
       </header>
 
@@ -54,35 +52,8 @@ export const TimerPanel = ({ state, controls, autoStartSeconds }: TimerPanelProp
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        {isActive ? (
-          <button className={`${CONTROL_BUTTON_STYLE} bg-primary text-primary-foreground`} onClick={controls.pause}>
-            Mettre en pause
-          </button>
-        ) : (
-          <button
-            className={`${CONTROL_BUTTON_STYLE} bg-primary text-primary-foreground`}
-            onClick={() =>
-              start(totalDuration || autoStartSeconds || 45 * 60)
-            }
-          >
-            {totalDuration === 0 ? "Démarrer" : "Reprendre"}
-          </button>
-        )}
-
-        <button className={CONTROL_BUTTON_STYLE} onClick={() => controls.addTime(5 * 60)}>
-          +5 min
-        </button>
-        <button className={CONTROL_BUTTON_STYLE} onClick={() => controls.addTime(-60)}>
-          -1 min
-        </button>
-        <button className={CONTROL_BUTTON_STYLE} onClick={controls.reset}>
-          Réinitialiser
-        </button>
-      </div>
-
-      <p className="mt-6 text-sm text-muted-foreground">
-        Ce timer reproduit l'expérience iOS : ajustements rapides, seuil critique à 10 %, et reprise fluide.
+      <p className="text-sm text-muted-foreground">
+        Le chrono démarre automatiquement et ne peut pas être mis en pause : reste concentré jusqu'à la résolution.
       </p>
     </section>
   );

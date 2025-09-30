@@ -10,6 +10,7 @@ type DetailPayload = {
   title?: string | null;
   duration?: number | null;
   difficulty?: number | null;
+  release_date?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -51,7 +52,7 @@ export async function GET() {
   }
 
   const detailResponse = await fetch(
-    `${supabaseUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty`,
+    `${supabaseUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty,release_date`,
     {
       headers: {
         apikey: supabaseAnonKey,
@@ -79,5 +80,6 @@ export async function GET() {
     title: detail.title ?? null,
     duration: detail.duration ?? null,
     difficulty: detail.difficulty ?? null,
+    releaseDate: detail.release_date ?? null,
   });
 }
