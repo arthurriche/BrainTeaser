@@ -5,10 +5,7 @@ import { Loader2, TriangleAlert } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { cn } from "@/lib/utils";
-
 import { TimerPanel } from "@/components/riddle/TimerPanel";
-import { ConversationPanel, type ChatMessage } from "@/components/riddle/ConversationPanel";
 import { useCountdown } from "@/hooks/useCountdown";
 
 interface RiddlePayload {
@@ -32,6 +29,9 @@ interface ScoreResult {
   timeSpent: number;
   userMessages: number;
   timeRemaining: number;
+  rankingPercent: number;
+  beatenPlayers: number;
+  totalPlayers: number;
 }
 
 const DIFFICULTY_MAP: Record<number, string> = {
@@ -42,6 +42,7 @@ const DIFFICULTY_MAP: Record<number, string> = {
 };
 
 const DEFAULT_DURATION = 45 * 60;
+const MAX_ATTEMPTS = 3;
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
   weekday: "long",
@@ -49,27 +50,6 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
   year: "numeric",
 });
-
-const createMessageId = () => `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const mapStoredMessages = (raw: unknown[]): ChatMessage[] =>
-  Array.isArray(raw)
-    ? raw.map((entry, index) => {
-        const candidate = entry as {
-          id?: string;
-          text?: string;
-          author?: string;
-          created_at?: string;
-        };
-
-        return {
-          id: candidate.id ?? `msg-server-${index}`,
-          text: String(candidate.text ?? ""),
-          author: candidate.author === "user" ? "user" : "master",
-          createdAt: candidate.created_at ? new Date(candidate.created_at).getTime() : Date.now(),
-        };
-      })
-    : [];
 
 const formatSeconds = (seconds: number) => {
   const mins = Math.floor(seconds / 60)
@@ -81,18 +61,40 @@ const formatSeconds = (seconds: number) => {
   return `${mins}:${secs}`;
 };
 
+const mergeScoreData = (
+  base: ScoreResult | null,
+  overrides: Partial<ScoreResult> & { score: number; rankingPercent: number; beatenPlayers: number; totalPlayers: number },
+): ScoreResult => ({
+  correct: overrides.correct ?? base?.correct ?? false,
+  score: overrides.score,
+  feedback:
+    overrides.feedback ??
+    base?.feedback ??
+    "Ta tentative est enregistrée. Analyse les indices pour améliorer ta prochaine réponse.",
+  hintsUsed: overrides.hintsUsed ?? base?.hintsUsed ?? 0,
+  timeSpent: overrides.timeSpent ?? base?.timeSpent ?? 0,
+  userMessages: overrides.userMessages ?? base?.userMessages ?? 0,
+  timeRemaining: overrides.timeRemaining ?? base?.timeRemaining ?? 0,
+  rankingPercent: overrides.rankingPercent,
+  beatenPlayers: overrides.beatenPlayers,
+  totalPlayers: overrides.totalPlayers,
+});
+
 export function RiddleClient() {
   const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [isMasterTyping, setIsMasterTyping] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
+
   const [revealedHints, setRevealedHints] = useState<number[]>([]);
   const [userAnswer, setUserAnswer] = useState("");
-  const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [attemptsUsed, setAttemptsUsed] = useState(0);
+
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [showScoreboard, setShowScoreboard] = useState(false);
+  const [scoreboardError, setScoreboardError] = useState<string | null>(null);
+  const [scoreboardLoading, setScoreboardLoading] = useState(false);
+
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
   const [countdownState, countdownControls] = useCountdown();
   const { start, pause } = countdownControls;
@@ -112,24 +114,12 @@ export function RiddleClient() {
       }
       setRiddle(payload);
       start(payload.duration ?? DEFAULT_DURATION);
-
-      const conversationResponse = await fetch(
-        `/api/master-chat?riddleId=${payload.id}`,
-        { cache: "no-store" },
-      );
-      if (conversationResponse.ok) {
-        const data = await conversationResponse.json();
-        setMessages(mapStoredMessages(data?.messages ?? []));
-      } else {
-        setMessages([
-          {
-            id: createMessageId(),
-            author: "master",
-            text: "Bienvenue. Quelle est ta première intuition ?",
-            createdAt: Date.now(),
-          },
-        ]);
-      }
+      setRevealedHints([]);
+      setUserAnswer("");
+      setAttemptsUsed(0);
+      setScoreResult(null);
+      setShowScoreboard(false);
+      setScoreboardError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inattendue");
     } finally {
@@ -155,105 +145,26 @@ export function RiddleClient() {
 
   const hints = useMemo(() => {
     if (!riddle) return [] as string[];
-    const list = [riddle.hint1, riddle.hint2, riddle.hint3].filter(
+    return [riddle.hint1, riddle.hint2, riddle.hint3].filter(
       (hint): hint is string => Boolean(hint),
     );
-    return list;
   }, [riddle]);
 
   const hasMoreHints = revealedHints.length < hints.length;
+  const attemptsLeft = Math.max(0, MAX_ATTEMPTS - attemptsUsed);
 
-  const handleRevealHint = useCallback(async () => {
-    if (!riddle || !hasMoreHints) return;
-    const nextIndex = revealedHints.length;
-    const hintText = hints[nextIndex];
-    const hintMessage: ChatMessage = {
-      id: createMessageId(),
-      author: "master",
-      text: `Indice ${nextIndex + 1} : ${hintText}`,
-      createdAt: Date.now(),
-    };
-
-    setRevealedHints((prev) => [...prev, nextIndex]);
-    setMessages((prev) => [...prev, hintMessage]);
-
-    try {
-      const response = await fetch("/api/master-chat", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          riddleId: riddle.id,
-          masterMessage: hintMessage.text,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(mapStoredMessages(data?.messages ?? []));
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }, [riddle, hasMoreHints, revealedHints.length, hints]);
-
-  const handleSendMessage = useCallback(
-    async (content: string) => {
-      if (!riddle) return;
-      const optimisticMessage: ChatMessage = {
-        id: createMessageId(),
-        author: "user",
-        text: content,
-        createdAt: Date.now(),
-      };
-
-      setChatError(null);
-      setIsSendingMessage(true);
-      setIsMasterTyping(true);
-      setMessages((prev) => [...prev, optimisticMessage]);
-
-      try {
-        const response = await fetch("/api/master-chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            riddleId: riddle.id,
-            message: content,
-            riddleContext: {
-              question: riddle.question,
-              title: riddle.title,
-              hints,
-            },
-            revealedHints: revealedHints.map((index) => hints[index]),
-          }),
-        });
-
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(body || "Conversation indisponible");
-        }
-
-        const data = await response.json();
-        setMessages(mapStoredMessages(data?.messages ?? []));
-      } catch (err) {
-        setChatError(err instanceof Error ? err.message : "Erreur de conversation");
-        setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
-      } finally {
-        setIsSendingMessage(false);
-        setIsMasterTyping(false);
-      }
-    },
-    [riddle, revealedHints, hints],
-  );
-
-  const totalDuration = countdownState.totalDuration || riddle?.duration || DEFAULT_DURATION;
-  const hintsUsed = revealedHints.length;
-  const userMessagesCount = messages.filter((message) => message.author === "user").length;
-  const conversationLocked = Boolean(scoreResult?.correct);
+  const handleRevealHint = useCallback(() => {
+    if (!hasMoreHints) return;
+    setRevealedHints((prev) => [...prev, prev.length]);
+  }, [hasMoreHints]);
 
   const handleSubmitAnswer = useCallback(async () => {
-    if (!riddle || !userAnswer.trim() || submittingAnswer) return;
+    if (!riddle || !userAnswer.trim()) return;
+    if (attemptsUsed >= MAX_ATTEMPTS || submittingAnswer) return;
 
     setSubmittingAnswer(true);
-    setChatError(null);
+    setShowScoreboard(false);
+    setScoreboardError(null);
 
     try {
       const response = await fetch("/api/riddle-submit", {
@@ -262,10 +173,10 @@ export function RiddleClient() {
         body: JSON.stringify({
           riddleId: riddle.id,
           answer: userAnswer,
-          totalDuration,
+          totalDuration: countdownState.totalDuration,
           timeRemaining: countdownState.timeRemaining,
-          hintsUsed,
-          userMessages: userMessagesCount,
+          hintsUsed: revealedHints.length,
+          userMessages: attemptsUsed + 1,
         }),
       });
 
@@ -275,16 +186,62 @@ export function RiddleClient() {
       }
 
       const result = (await response.json()) as ScoreResult;
+      setAttemptsUsed((prev) => prev + 1);
       setScoreResult(result);
-      if (result.correct) {
+
+      if (result.correct || attemptsUsed + 1 >= MAX_ATTEMPTS) {
         pause();
+        setShowScoreboard(true);
       }
     } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Soumission impossible");
+      setScoreboardError(err instanceof Error ? err.message : "Soumission impossible");
     } finally {
       setSubmittingAnswer(false);
     }
-  }, [riddle, userAnswer, submittingAnswer, totalDuration, countdownState.timeRemaining, hintsUsed, userMessagesCount, pause]);
+  }, [riddle, userAnswer, attemptsUsed, submittingAnswer, countdownState.totalDuration, countdownState.timeRemaining, revealedHints.length, pause]);
+
+  const fetchScoreboard = useCallback(async () => {
+    if (!riddle) return;
+    setScoreboardLoading(true);
+    setScoreboardError(null);
+    try {
+      const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}`, { cache: "no-store" });
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(body || "Impossible de récupérer le classement");
+      }
+      const data = await response.json();
+      if (data?.hasScore) {
+        const merged = mergeScoreData(scoreResult, {
+          score: data.score ?? 0,
+          rankingPercent: data.rankingPercent ?? 0,
+          beatenPlayers: data.beatenPlayers ?? 0,
+          totalPlayers: data.totalPlayers ?? 0,
+          hintsUsed: scoreResult?.hintsUsed ?? revealedHints.length,
+          timeSpent: data.duration ?? countdownState.totalDuration,
+          userMessages: data.msgCount ?? attemptsUsed,
+          timeRemaining: scoreResult?.timeRemaining ?? 0,
+        });
+        setScoreResult(merged);
+        setShowScoreboard(true);
+      } else {
+        setScoreboardError("Aucun score enregistré pour cette énigme.");
+        setShowScoreboard(true);
+      }
+    } catch (err) {
+      setScoreboardError(err instanceof Error ? err.message : "Impossible de récupérer le classement");
+      setShowScoreboard(true);
+    } finally {
+      setScoreboardLoading(false);
+    }
+  }, [riddle, scoreResult, revealedHints.length, countdownState.totalDuration, attemptsUsed]);
+
+  useEffect(() => {
+    if (!showScoreboard && countdownState.timeRemaining === 0) {
+      void fetchScoreboard();
+      pause();
+    }
+  }, [countdownState.timeRemaining, fetchScoreboard, showScoreboard, pause]);
 
   if (loading) {
     return (
@@ -316,8 +273,74 @@ export function RiddleClient() {
     );
   }
 
+  const scoreboardShouldDisplay = showScoreboard || scoreResult?.correct;
+
+  if (scoreboardShouldDisplay) {
+    return (
+      <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-10 px-6 py-16 text-center">
+        <div className="space-y-3">
+          <p className="text-xs font-medium uppercase tracking-[0.3em] text-muted-foreground">Classement</p>
+          <h1 className="text-4xl font-semibold text-foreground">Résultats de l’énigme n°{riddle.id}</h1>
+        </div>
+
+        <div className="w-full space-y-4 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
+          <p className="text-lg font-semibold text-foreground">Score : {scoreResult?.score ?? 0}</p>
+          <p>{scoreResult?.feedback ?? "Ton score est enregistré. Reviens demain pour une nouvelle énigme."}</p>
+
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-muted/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Temps utilisé</p>
+              <p className="text-lg font-medium text-foreground">{formatSeconds(scoreResult?.timeSpent ?? 0)}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Tentatives restantes</p>
+              <p className="text-lg font-medium text-foreground">{Math.max(0, MAX_ATTEMPTS - attemptsUsed)}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Indices utilisés</p>
+              <p className="text-lg font-medium text-foreground">{scoreResult?.hintsUsed ?? revealedHints.length}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Participants battus</p>
+              <p className="text-lg font-medium text-foreground">
+                {scoreResult?.totalPlayers
+                  ? `${scoreResult.beatenPlayers}/${scoreResult.totalPlayers} (${scoreResult.rankingPercent} %)`
+                  : "Insuffisant pour établir un classement"}
+              </p>
+            </div>
+          </div>
+
+          {scoreboardError && (
+            <p className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {scoreboardError}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col items-center gap-4 text-sm text-muted-foreground">
+          <button
+            type="button"
+            className="rounded-full bg-primary px-6 py-3 text-base font-semibold text-primary-foreground transition hover:bg-primary/90"
+            onClick={() => window.alert("Apple Pay n’est pas encore connecté. Merci de votre soutien !")}
+          >
+            Soutenir via Apple Pay (0,30 €)
+          </button>
+          <button
+            type="button"
+            className="rounded-full border border-border px-5 py-2 font-medium text-foreground transition hover:bg-muted"
+            onClick={() => window.location.assign("/")}
+          >
+            Retourner à l’accueil
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16">
+      <TimerPanel state={countdownState} />
+
       <header className="space-y-3">
         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
           Étape de résolution
@@ -340,116 +363,98 @@ export function RiddleClient() {
         </div>
       </header>
 
-      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <main className="space-y-8">
-          {riddle.imageURL && (
-            <div className="overflow-hidden rounded-3xl border border-border bg-muted/60 shadow-inner">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={riddle.imageURL} alt="Illustration de l’énigme" className="w-full object-cover" />
-            </div>
+      <div className="space-y-8">
+        {riddle.imageURL && (
+          <div className="overflow-hidden rounded-3xl border border-border bg-muted/60 shadow-inner">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={riddle.imageURL} alt="Illustration de l’énigme" className="w-full object-cover" />
+          </div>
+        )}
+
+        <article className="space-y-6 rounded-3xl border border-border bg-white p-10 text-lg leading-relaxed text-muted-foreground shadow-xl">
+          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Enoncé</p>
+          <div className="prose prose-slate max-w-none text-foreground">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{riddle.question}</ReactMarkdown>
+          </div>
+        </article>
+
+        <section className="space-y-4 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
+          <h3 className="text-lg font-semibold text-foreground">Ta réponse</h3>
+          <textarea
+            className="min-h-[120px] w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground outline-none focus:border-primary"
+            placeholder="Formule ici ta solution complète."
+            value={userAnswer}
+            onChange={(event) => setUserAnswer(event.target.value)}
+            disabled={submittingAnswer || attemptsUsed >= MAX_ATTEMPTS}
+          />
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>Essais restants : {attemptsLeft}</span>
+            <span>Temps restant : {formatSeconds(countdownState.timeRemaining)}</span>
+            <span>Indices utilisés : {revealedHints.length}</span>
+          </div>
+          {scoreResult && !scoreResult.correct && attemptsUsed > 0 && (
+            <p className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {scoreResult.feedback}
+            </p>
           )}
-
-          <article className="space-y-6 rounded-3xl border border-border bg-white p-10 text-lg leading-relaxed text-muted-foreground shadow-xl">
-            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Enoncé</p>
-            <div className="prose prose-slate max-w-none text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{riddle.question}</ReactMarkdown>
-            </div>
-          </article>
-
-          <section className="space-y-4 rounded-3xl border border-border bg-white p-8 text-sm text-muted-foreground shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Indices</h3>
-              {hasMoreHints && (
-                <button
-                  type="button"
-                  className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-                  onClick={handleRevealHint}
-                >
-                  Révéler l’indice {revealedHints.length + 1}
-                </button>
-              )}
-            </div>
-            <div className="space-y-3">
-              {revealedHints.length === 0 && <p>Utilise les indices avec parcimonie : chaque indice réduit ton score final.</p>}
-              {revealedHints.map((index) => (
-                <div
-                  key={`hint-${index}`}
-                  className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-primary"
-                >
-                  <p className="text-sm font-semibold">Indice {index + 1}</p>
-                  <div className="prose prose-primary mt-2 max-w-none text-primary">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{hints[index]}</ReactMarkdown>
-                  </div>
-                </div>
-              ))}
-              {!hasMoreHints && hints.length > 0 && (
-                <p className="text-xs text-muted-foreground">Tous les indices ont été révélés.</p>
-              )}
-            </div>
-          </section>
-
-          <section className="space-y-4 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">Ta réponse finale</h3>
-            <textarea
-              className="min-h-[120px] w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground outline-none focus:border-primary"
-              placeholder="Formule ici ta solution complète."
-              value={userAnswer}
-              onChange={(event) => setUserAnswer(event.target.value)}
-              disabled={submittingAnswer || Boolean(scoreResult?.correct)}
-            />
-            <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-              <span>Indices utilisés : {hintsUsed}</span>
-              <span>Messages envoyés : {userMessagesCount}</span>
-              <span>Temps restant : {formatSeconds(countdownState.timeRemaining)}</span>
-            </div>
-            {scoreResult && (
-              <div
-                className={cn(
-                  "rounded-2xl border px-4 py-3 text-sm",
-                  scoreResult.correct
-                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700"
-                    : "border-amber-500/50 bg-amber-500/10 text-amber-700",
-                )}
-              >
-                <p className="font-semibold">Score : {scoreResult.score}</p>
-                <p>{scoreResult.feedback}</p>
-                <p className="mt-2 text-xs">Temps écoulé : {formatSeconds(scoreResult.timeSpent)} – Indices : {scoreResult.hintsUsed}</p>
-              </div>
-            )}
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
               onClick={handleSubmitAnswer}
-              disabled={submittingAnswer || Boolean(scoreResult?.correct)}
+              disabled={submittingAnswer || attemptsUsed >= MAX_ATTEMPTS}
             >
-              {submittingAnswer ? "Validation..." : "Valider ma réponse"}
+              {submittingAnswer ? "Validation…" : "Valider ma réponse"}
             </button>
-          </section>
-        </main>
+            <button
+              type="button"
+              className="rounded-full border border-border px-5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+              onClick={fetchScoreboard}
+              disabled={scoreboardLoading}
+            >
+              {scoreboardLoading ? "Calcul en cours…" : "Voir mon classement"}
+            </button>
+          </div>
+        </section>
 
-        <aside className="flex flex-col gap-6">
-          <TimerPanel
-            state={countdownState}
-            controls={countdownControls}
-            autoStartSeconds={riddle.duration ?? DEFAULT_DURATION}
-          />
+        <section className="space-y-4 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-foreground">Indices</h3>
+            {hasMoreHints && (
+              <button
+                type="button"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+                onClick={handleRevealHint}
+              >
+                Révéler l’indice {revealedHints.length + 1}
+              </button>
+            )}
+          </div>
+          <div className="space-y-3">
+            {revealedHints.length === 0 && <p>Utilise les indices avec parcimonie : chaque indice réduit ton score final.</p>}
+            {revealedHints.map((index) => (
+              <div
+                key={`hint-${index}`}
+                className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-primary"
+              >
+                <p className="text-sm font-semibold">Indice {index + 1}</p>
+                <div className="prose prose-primary mt-2 max-w-none text-primary">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{hints[index]}</ReactMarkdown>
+                </div>
+              </div>
+            ))}
+            {!hasMoreHints && hints.length > 0 && revealedHints.length > 0 && (
+              <p className="text-xs text-muted-foreground">Tous les indices ont été révélés.</p>
+            )}
+            {hints.length === 0 && <p>Aucun indice n’est disponible pour cette énigme.</p>}
+          </div>
+        </section>
 
-          <ConversationPanel
-            messages={messages}
-            isMasterTyping={isMasterTyping}
-            isSending={isSendingMessage}
-            onSend={handleSendMessage}
-            onRequestHint={hasMoreHints ? handleRevealHint : undefined}
-            hasMoreHints={hasMoreHints}
-            disableInput={conversationLocked}
-          />
-
-          {chatError && (
-            <p className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {chatError}
-            </p>
-          )}
-        </aside>
+        {scoreboardError && !showScoreboard && (
+          <p className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {scoreboardError}
+          </p>
+        )}
       </div>
     </div>
   );

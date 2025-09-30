@@ -73,12 +73,27 @@ export async function POST(request: Request) {
 
     if (upsertError) {
       console.error(upsertError);
-      return NextResponse.json({ error: "Impossible d'enregistrer le score" }, { status: 500 });
+      return NextResponse.json({ error: "Impossible d’enregistrer le score" }, { status: 500 });
     }
+
+    const totalResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId);
+
+    const lowerResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId)
+      .lt("score", score);
+
+    const totalPlayers = totalResponse.count ?? 0;
+    const beatenPlayers = lowerResponse.count ?? 0;
+    const rankingPercent = totalPlayers > 0 ? Math.round((beatenPlayers / totalPlayers) * 100) : 0;
 
     const feedback = correct
       ? "Bravo ! Ta réponse est juste."
-      : "La réponse proposée ne correspond pas. Continue de creuser ou reviens avec une nouvelle intuition.";
+      : "La réponse proposée ne correspond pas. Précise certains points ou utilise un indice supplémentaire avant ta prochaine tentative.";
 
     return NextResponse.json({
       correct,
@@ -88,6 +103,9 @@ export async function POST(request: Request) {
       timeSpent,
       userMessages,
       timeRemaining,
+      rankingPercent,
+      beatenPlayers,
+      totalPlayers,
     });
   } catch (error) {
     console.error(error);

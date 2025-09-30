@@ -1,0 +1,71 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+
+const createClient = () => {
+  const cookieStore = cookies();
+  return createRouteHandlerClient({ cookies: () => cookieStore });
+};
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const riddleId = Number.parseInt(searchParams.get("riddleId") ?? "", 10);
+
+    if (Number.isNaN(riddleId) || riddleId <= 0) {
+      return NextResponse.json({ error: "riddleId requis" }, { status: 400 });
+    }
+
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
+    const { data: existingScore, error: scoreError } = await supabase
+      .from("scores")
+      .select("score,duration,msg_count")
+      .eq("user_id", session.user.id)
+      .eq("riddle_id", riddleId)
+      .maybeSingle();
+
+    if (scoreError) {
+      throw new Error(scoreError.message);
+    }
+
+    if (!existingScore) {
+      return NextResponse.json({ hasScore: false });
+    }
+
+    const totalResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId);
+
+    const lowerResponse = await supabase
+      .from("scores")
+      .select("score", { count: "exact", head: true })
+      .eq("riddle_id", riddleId)
+      .lt("score", existingScore.score ?? 0);
+
+    const totalPlayers = totalResponse.count ?? 0;
+    const beatenPlayers = lowerResponse.count ?? 0;
+    const rankingPercent = totalPlayers > 0 ? Math.round((beatenPlayers / totalPlayers) * 100) : 0;
+
+    return NextResponse.json({
+      hasScore: true,
+      score: existingScore.score ?? 0,
+      duration: existingScore.duration ?? null,
+      msgCount: existingScore.msg_count ?? null,
+      totalPlayers,
+      beatenPlayers,
+      rankingPercent,
+    });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Erreur inattendue" }, { status: 500 });
+  }
+}
