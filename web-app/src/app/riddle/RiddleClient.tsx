@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
+import Confetti from "react-confetti";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -43,7 +44,6 @@ const DIFFICULTY_MAP: Record<number, string> = {
 };
 
 const DEFAULT_DURATION = 45 * 60;
-const MAX_ATTEMPTS = 3;
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
   weekday: "long",
@@ -82,6 +82,17 @@ const mergeScoreData = (
   hints: overrides.hints ?? base?.hints ?? [],
 });
 
+const useViewportSize = () => {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const update = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return size;
+};
+
 export function RiddleClient() {
   const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +100,6 @@ export function RiddleClient() {
 
   const [revealedHints, setRevealedHints] = useState<number[]>([]);
   const [userAnswer, setUserAnswer] = useState("");
-  const [attemptsUsed, setAttemptsUsed] = useState(0);
 
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showScoreboard, setShowScoreboard] = useState(false);
@@ -97,6 +107,8 @@ export function RiddleClient() {
   const [scoreboardLoading, setScoreboardLoading] = useState(false);
 
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
+
+  const viewport = useViewportSize();
 
   const [countdownState, countdownControls] = useCountdown();
   const { start, pause } = countdownControls;
@@ -118,7 +130,6 @@ export function RiddleClient() {
       start(payload.duration ?? DEFAULT_DURATION);
       setRevealedHints([]);
       setUserAnswer("");
-      setAttemptsUsed(0);
       setScoreResult(null);
       setShowScoreboard(false);
       setScoreboardError(null);
@@ -153,7 +164,6 @@ export function RiddleClient() {
   }, [riddle]);
 
   const hasMoreHints = revealedHints.length < hints.length;
-  const attemptsLeft = Math.max(0, MAX_ATTEMPTS - attemptsUsed);
 
   const handleRevealHint = useCallback(() => {
     if (!hasMoreHints) return;
@@ -161,8 +171,7 @@ export function RiddleClient() {
   }, [hasMoreHints]);
 
   const handleSubmitAnswer = useCallback(async () => {
-    if (!riddle || !userAnswer.trim()) return;
-    if (attemptsUsed >= MAX_ATTEMPTS || submittingAnswer) return;
+    if (!riddle || !userAnswer.trim() || submittingAnswer || scoreResult) return;
 
     setSubmittingAnswer(true);
     setShowScoreboard(false);
@@ -178,7 +187,8 @@ export function RiddleClient() {
           totalDuration: countdownState.totalDuration,
           timeRemaining: countdownState.timeRemaining,
           hintsUsed: revealedHints.length,
-          userMessages: attemptsUsed + 1,
+          userMessages: 1,
+          hints: revealedHints.map((index) => hints[index]).filter(Boolean),
         }),
       });
 
@@ -196,26 +206,22 @@ export function RiddleClient() {
         return;
       }
       const result = data as ScoreResult;
-      setAttemptsUsed((prev) => prev + 1);
       setScoreResult(result);
-
-      if (result.correct || attemptsUsed + 1 >= MAX_ATTEMPTS) {
-        pause();
-        setShowScoreboard(true);
-      }
+      pause();
+      setShowScoreboard(true);
     } catch (err) {
       setScoreboardError(err instanceof Error ? err.message : "Soumission impossible");
     } finally {
       setSubmittingAnswer(false);
     }
-  }, [riddle, userAnswer, attemptsUsed, submittingAnswer, countdownState.totalDuration, countdownState.timeRemaining, revealedHints.length, pause]);
+  }, [riddle, userAnswer, submittingAnswer, countdownState.totalDuration, countdownState.timeRemaining, revealedHints, pause, scoreResult, hints]);
 
   const fetchScoreboard = useCallback(async () => {
     if (!riddle) return;
     setScoreboardLoading(true);
     setScoreboardError(null);
     try {
-      const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}`, { cache: "no-store" });
+      const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}`, { cache: "no-store", credentials: "include" });
       if (response.status === 401) {
         setScoreboardError('Connecte-toi pour accéder au classement.');
         setShowScoreboard(true);
@@ -240,9 +246,9 @@ export function RiddleClient() {
           beatenPlayers: data.beatenPlayers ?? 0,
           totalPlayers: data.totalPlayers ?? 0,
           hintsUsed: scoreResult?.hintsUsed ?? revealedHints.length,
-          timeSpent: data.duration ?? countdownState.totalDuration,
-          userMessages: data.msgCount ?? attemptsUsed,
-          timeRemaining: scoreResult?.timeRemaining ?? 0,
+          timeSpent: data.duration ?? scoreResult?.timeSpent ?? countdownState.totalDuration,
+          userMessages: data.msgCount ?? scoreResult?.userMessages ?? 1,
+          timeRemaining: scoreResult?.timeRemaining ?? countdownState.timeRemaining,
           hints: scoreResult?.hints ?? hints,
         });
         setScoreResult(merged);
@@ -257,7 +263,7 @@ export function RiddleClient() {
     } finally {
       setScoreboardLoading(false);
     }
-  }, [riddle, scoreResult, revealedHints.length, countdownState.totalDuration, attemptsUsed, hints]);
+  }, [riddle, scoreResult, countdownState.totalDuration, countdownState.timeRemaining, hints, revealedHints]);
 
   useEffect(() => {
     if (!showScoreboard && countdownState.timeRemaining === 0) {
@@ -296,42 +302,69 @@ export function RiddleClient() {
     );
   }
 
-  const scoreboardShouldDisplay = showScoreboard || scoreResult?.correct;
+  const scoreboardShouldDisplay = showScoreboard || Boolean(scoreResult);
 
   if (scoreboardShouldDisplay) {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-10 px-6 py-16 text-center">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-center gap-10 px-6 py-16 text-center">
+        {viewport.width > 0 && viewport.height > 0 && (
+          <Confetti width={viewport.width} height={viewport.height} numberOfPieces={220} recycle={false} />
+        )}
         <div className="space-y-3">
           <p className="text-xs font-medium uppercase tracking-[0.3em] text-muted-foreground">Classement</p>
           <h1 className="text-4xl font-semibold text-foreground">Résultats de l’énigme n°{riddle.id}</h1>
         </div>
 
-        <div className="w-full space-y-4 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
-          <p className="text-lg font-semibold text-foreground">Score : {scoreResult?.score ?? 0}</p>
-          <p>{scoreResult?.feedback ?? "Ton score est enregistré. Reviens demain pour une nouvelle énigme."}</p>
+        <div className="w-full space-y-6 rounded-3xl border border-border bg-white p-8 text-muted-foreground shadow-xl">
+          <div className="space-y-2">
+            <p className="text-lg font-semibold text-foreground">Score : {scoreResult?.score ?? 0}</p>
+            <p className="whitespace-pre-line">{scoreResult?.feedback ?? "Ton score est enregistré. Reviens demain pour une nouvelle énigme."}</p>
+          </div>
 
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-muted/50 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Temps utilisé</p>
-              <p className="text-lg font-medium text-foreground">{formatSeconds(scoreResult?.timeSpent ?? 0)}</p>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-primary/30 bg-primary/5 p-8 text-primary">
+              <span className="text-sm uppercase tracking-[0.3em] text-primary/70">Tu surpasses</span>
+              <span className="text-6xl font-black">{scoreResult?.rankingPercent ?? 0}%</span>
+              <span className="mt-2 text-xs text-primary/70">
+                {scoreResult?.totalPlayers ? `${scoreResult.beatenPlayers} joueurs sur ${scoreResult.totalPlayers}` : "Pas encore de comparaison disponible"}
+              </span>
             </div>
-            <div className="rounded-2xl border border-border bg-muted/50 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Tentatives restantes</p>
-              <p className="text-lg font-medium text-foreground">{Math.max(0, MAX_ATTEMPTS - attemptsUsed)}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/50 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Indices utilisés</p>
-              <p className="text-lg font-medium text-foreground">{scoreResult?.hintsUsed ?? revealedHints.length}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/50 p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Participants battus</p>
-              <p className="text-lg font-medium text-foreground">
-                {scoreResult?.totalPlayers
-                  ? `${scoreResult.beatenPlayers}/${scoreResult.totalPlayers} (${scoreResult.rankingPercent} %)`
-                  : "Insuffisant pour établir un classement"}
-              </p>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-white/60 p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Temps utilisé</p>
+                <p className="text-lg font-medium text-foreground">{formatSeconds(scoreResult?.timeSpent ?? 0)}</p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${Math.min(100, Math.max(0, ((scoreResult?.timeSpent ?? 0) / Math.max(1, riddle.duration ?? DEFAULT_DURATION)) * 100))}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-white/60 p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Indices utilisés</p>
+                <p className="text-lg font-medium text-foreground">{scoreResult?.hintsUsed ?? revealedHints.length}</p>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-amber-500 transition-all"
+                    style={{ width: `${Math.min(100, ((scoreResult?.hintsUsed ?? revealedHints.length) / Math.max(1, hints.length)) * 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
+
+          {scoreResult?.hints && scoreResult.hints.length > 0 && (
+            <div className="space-y-2 rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-left">
+              <p className="text-xs uppercase tracking-wide text-primary">Indices à retenir</p>
+              <ul className="space-y-2 text-sm text-primary">
+                {scoreResult.hints.map((hint, index) => (
+                  <li key={`score-hint-${index}`} className="rounded-xl bg-white/70 px-3 py-2 shadow-sm">
+                    <span className="font-semibold">Indice {index + 1} :</span> {hint}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {scoreboardError && (
             <p className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -359,7 +392,6 @@ export function RiddleClient() {
       </div>
     );
   }
-
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16">
       <TimerPanel state={countdownState} />
@@ -408,15 +440,14 @@ export function RiddleClient() {
             placeholder="Formule ici ta solution complète."
             value={userAnswer}
             onChange={(event) => setUserAnswer(event.target.value)}
-            disabled={submittingAnswer || attemptsUsed >= MAX_ATTEMPTS}
+            disabled={submittingAnswer || Boolean(scoreResult)}
           />
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span>Essais restants : {attemptsLeft}</span>
             <span>Temps restant : {formatSeconds(countdownState.timeRemaining)}</span>
             <span>Indices utilisés : {revealedHints.length}</span>
           </div>
-          {scoreResult && !scoreResult.correct && attemptsUsed > 0 && (
-            <p className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          {scoreResult && !scoreResult.correct && (
+<p className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-700">
               {scoreResult.feedback}
             </p>
           )}
@@ -425,18 +456,20 @@ export function RiddleClient() {
               type="button"
               className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted"
               onClick={handleSubmitAnswer}
-              disabled={submittingAnswer || attemptsUsed >= MAX_ATTEMPTS}
+              disabled={submittingAnswer || Boolean(scoreResult)}
             >
               {submittingAnswer ? "Validation…" : "Valider ma réponse"}
             </button>
-            <button
-              type="button"
-              className="rounded-full border border-border px-5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
-              onClick={fetchScoreboard}
-              disabled={scoreboardLoading}
-            >
-              {scoreboardLoading ? "Calcul en cours…" : "Voir mon classement"}
-            </button>
+            {!scoreResult && (
+              <button
+                type="button"
+                className="rounded-full border border-border px-5 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                onClick={fetchScoreboard}
+                disabled={scoreboardLoading}
+              >
+                {scoreboardLoading ? "Calcul en cours…" : "Voir mon classement"}
+              </button>
+            )}
           </div>
         </section>
 
