@@ -60,7 +60,7 @@ export const RiddleIntro = () => {
 
         if (!response.ok) {
           const body = await response.text();
-          throw new Error(body || "Impossible de charger l'énigme du jour.");
+          throw new Error(body || "Impossible de charger l’énigme du jour.");
         }
 
         const payload = (await response.json()) as RiddlePayload | null;
@@ -73,7 +73,7 @@ export const RiddleIntro = () => {
         setError(
           err instanceof Error
             ? err.message
-            : "Impossible de charger l'énigme du jour."
+            : "Impossible de charger l’énigme du jour."
         );
       } finally {
         if (!aborted) {
@@ -106,7 +106,7 @@ export const RiddleIntro = () => {
       <div className="flex min-h-[70vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-muted/80 px-8 py-6 text-sm text-muted-foreground">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-          Chargement de l'énigme du jour…
+          Chargement de l’énigme du jour…
         </div>
       </div>
     );
@@ -140,7 +140,7 @@ export const RiddleIntro = () => {
           {todayLabel()}
         </span>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
-          L'énigme du jour
+          L’énigme du jour
           <span className="block bg-gradient-to-r from-primary via-emerald-500 to-primary bg-clip-text text-transparent">
             Défie le Maître avec sang-froid
           </span>
@@ -168,9 +168,9 @@ export const RiddleIntro = () => {
             {riddle.title ?? "Énigme mystère"}
           </h2>
 
-          <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-slate max-w-none text-lg leading-relaxed text-muted-foreground">
-            {riddle.question}
-          </ReactMarkdown>
+          <div className="prose prose-slate max-w-none text-lg leading-relaxed text-muted-foreground">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{riddle.question}</ReactMarkdown>
+          </div>
         </article>
 
         <aside className="space-y-6">
@@ -201,7 +201,7 @@ export const RiddleIntro = () => {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={riddle.imageURL}
-                alt="Illustration de l'énigme"
+                alt="Illustration de l’énigme"
                 className="h-64 w-full object-cover"
               />
             ) : (
@@ -216,7 +216,7 @@ export const RiddleIntro = () => {
             onClick={() => router.push("/riddle")}
             className="w-full rounded-2xl bg-primary px-6 py-4 text-lg font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
-            Commencer l'énigme
+            Commencer l’énigme
           </button>
         </aside>
       </section>

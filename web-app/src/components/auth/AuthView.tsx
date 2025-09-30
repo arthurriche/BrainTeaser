@@ -116,13 +116,13 @@ export const AuthView = () => {
       });
       if (error) throw error;
       setInfoMessage(
-        `Si un compte existe pour ${email}, un lien de réinitialisation vient d'être envoyé.`
+        `Si un compte existe pour ${email}, un lien de réinitialisation vient d’être envoyé.`
       );
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Impossible d'envoyer l'email de réinitialisation."
+          : "Impossible d’envoyer l’email de réinitialisation."
       );
     } finally {
       setLoading(false);
@@ -145,7 +145,7 @@ export const AuthView = () => {
               </span>
             </h1>
             <p className="text-base text-muted-foreground">
-              1 énigme par jour, 100 jours de progression. Connecte-toi pour retrouver le Maître et reprendre le duel là où tu l'avais laissé.
+              1 énigme par jour, 100 jours de progression. Connecte-toi pour retrouver le Maître et reprendre le duel là où tu l’avais laissé.
             </p>
           </header>
 

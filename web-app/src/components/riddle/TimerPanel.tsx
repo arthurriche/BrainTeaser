@@ -53,7 +53,7 @@ export const TimerPanel = ({ state, controls, autoStartSeconds }: TimerPanelProp
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Le chrono démarre automatiquement et ne peut pas être mis en pause : reste concentré jusqu'à la résolution.
+        Le chrono démarre automatiquement et ne peut pas être mis en pause : reste concentré jusqu’à la résolution.
       </p>
     </section>
   );
