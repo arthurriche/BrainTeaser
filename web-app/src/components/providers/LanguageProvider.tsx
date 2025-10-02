@@ -77,13 +77,9 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       auth: "Sign in to view the leaderboard.",
       none: "No score recorded yet.",
     },
-    scoreboardControls: {
-      view: "View my ranking",
-      viewLoading: "Crunching numbers…",
-    },
     riddle: {
       stageLabel: "Resolution stage",
-      heroTitle: "The duel with the Master",
+      heroTitle: "Focus on the solution",
       puzzleNumber: ({ id }: { id: number }) => `Puzzle #${id}`,
       difficulty: ({ label }: { label: string }) => label,
       releaseDate: ({ date }: { date: string }) => `Published ${date}`,
@@ -175,13 +171,9 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       auth: "Connecte-toi pour accéder au classement.",
       none: "Aucun score enregistré pour l'instant.",
     },
-    scoreboardControls: {
-      view: "Voir mon classement",
-      viewLoading: "Calcul en cours…",
-    },
     riddle: {
       stageLabel: "Étape de résolution",
-      heroTitle: "Le duel avec le Maître",
+      heroTitle: "Concentre-toi sur la solution",
       puzzleNumber: ({ id }: { id: number }) => `Énigme n°${id}`,
       difficulty: ({ label }: { label: string }) => label,
       releaseDate: ({ date }: { date: string }) => `Publié le ${date}`,

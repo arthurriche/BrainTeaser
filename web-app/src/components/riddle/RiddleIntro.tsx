@@ -114,7 +114,7 @@ export const RiddleIntro = () => {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="rounded-full bg-white/80 px-6 py-2 text-sm font-semibold text-background transition hover:bg-white"
+          className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
         >
           {t("intro.retry")}
         </button>

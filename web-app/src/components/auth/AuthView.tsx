@@ -1,6 +1,7 @@
 
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -19,15 +20,24 @@ export const AuthView = () => {
   const copy = useMemo(() => {
     if (language === "fr") {
       return {
-        badge: "Programme quotidien",
         heroTitle: "Enigmate",
-        heroHighlight: "Deviens plus affûté chaque jour",
-        heroDescription:
-          "Une énigme par jour, des statistiques précises et un Maître toujours prêt à challenger ta logique.",
-        benefits: [
-          "🎯 Difficulté adaptée de novice à grand maître",
-          "🧠 Analyse, discute avec Le Maître et mesure tes progrès",
-        ],
+        heroTagline: "Deviens plus affûté chaque jour",
+        mathLevelLabel: "Niveau de maths",
+        mathLevelPlaceholder: "Choisis ton niveau",
+        mathLevels: [
+          { value: "college", label: "Collège" },
+          { value: "lycee", label: "Lycée" },
+          { value: "superieur", label: "Supérieur" },
+        ] as const,
+        occupationLabel: "Fonction",
+        occupationPlaceholder: "Sélectionne ta fonction",
+        occupations: [
+          { value: "student", label: "Étudiant" },
+          { value: "worker", label: "Travailleur" },
+          { value: "other", label: "Autre" },
+        ] as const,
+        missingMathLevel: "Merci d’indiquer ton niveau de maths.",
+        missingOccupation: "Merci d’indiquer ta fonction.",
         signInTab: "Connexion",
         signUpTab: "Inscription",
         linkedin: "Continuer avec LinkedIn",
@@ -54,15 +64,24 @@ export const AuthView = () => {
       };
     }
     return {
-      badge: "Daily ritual",
       heroTitle: "Enigmate",
-      heroHighlight: "Sharpen your thinking every single day",
-      heroDescription:
-        "One handcrafted riddle per day, precise scoring, and the Master ready to push your reasoning further.",
-      benefits: [
-        "🎯 Difficulty adapts from novice to grandmaster",
-        "🧠 Analyse, debate with the Master, and track your evolution",
-      ],
+      heroTagline: "Sharpen your mind every day",
+      mathLevelLabel: "Math level",
+      mathLevelPlaceholder: "Select your level",
+      mathLevels: [
+        { value: "college", label: "Middle school" },
+        { value: "lycee", label: "High school" },
+        { value: "superieur", label: "Higher education" },
+      ] as const,
+      occupationLabel: "Role",
+      occupationPlaceholder: "Select your role",
+      occupations: [
+        { value: "student", label: "Student" },
+        { value: "worker", label: "Professional" },
+        { value: "other", label: "Other" },
+      ] as const,
+      missingMathLevel: "Please choose your math level.",
+      missingOccupation: "Please choose your role.",
       signInTab: "Sign in",
       signUpTab: "Create account",
       linkedin: "Continue with LinkedIn",
@@ -93,6 +112,8 @@ export const AuthView = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [mathLevel, setMathLevel] = useState("");
+  const [occupation, setOccupation] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -101,7 +122,7 @@ export const AuthView = () => {
   const canSubmit =
     email.trim().length > 0 &&
     password.length >= 6 &&
-    (authMode === "signIn" || fullName.trim().length > 1);
+    (authMode === "signIn" || (fullName.trim().length > 1 && mathLevel && occupation));
 
   const clearMessages = () => {
     setErrorMessage(null);
@@ -116,6 +137,16 @@ export const AuthView = () => {
 
     if (password.length < 6) {
       setErrorMessage(copy.weakPassword);
+      return;
+    }
+
+    if (authMode === "signUp" && !mathLevel) {
+      setErrorMessage(copy.missingMathLevel);
+      return;
+    }
+
+    if (authMode === "signUp" && !occupation) {
+      setErrorMessage(copy.missingOccupation);
       return;
     }
 
@@ -136,11 +167,15 @@ export const AuthView = () => {
           options: {
             data: {
               full_name: fullName,
+              math_level: mathLevel,
+              occupation,
             },
           },
         });
         if (error) throw error;
         setInfoMessage(copy.verificationEmail(email));
+        setMathLevel("");
+        setOccupation("");
       }
     } catch (error) {
       setErrorMessage(
@@ -205,21 +240,20 @@ export const AuthView = () => {
     <div className="relative min-h-screen pb-24 text-white">
       <TopBar />
       <div className="mx-auto mt-16 flex w-full max-w-6xl flex-col gap-12 px-6 lg:flex-row">
-        <article className="elevated-card flex-1 space-y-8 p-10 text-white/85">
-          <span className="muted-label text-white/50">{copy.badge}</span>
-          <h1 className="text-4xl font-semibold text-white">
-            {copy.heroTitle}
-            <span className="block bg-gradient-to-r from-white via-primary to-accent bg-clip-text text-transparent">
-              {copy.heroHighlight}
-            </span>
-          </h1>
-          <p className="text-base text-white/70">{copy.heroDescription}</p>
-          <div className="space-y-3 text-sm text-white/70">
-            {copy.benefits.map((benefit) => (
-              <div key={benefit} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                {benefit}
-              </div>
-            ))}
+        <article className="relative flex-1 overflow-hidden rounded-[32px] border border-amber-200/30 bg-gradient-to-br from-amber-400/20 via-amber-300/10 to-transparent p-10 text-white">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20">
+            <Image
+              src="/Logo_Enigmate_Transparent.png"
+              alt="Large Enigmate logo"
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-contain"
+            />
+          </div>
+          <div className="relative flex h-full flex-col justify-center gap-6">
+            <h1 className="text-5xl font-semibold tracking-tight text-white md:text-6xl">{copy.heroTitle}</h1>
+            <p className="max-w-xl text-2xl font-semibold text-amber-100 md:text-3xl">{copy.heroTagline}</p>
           </div>
         </article>
 
@@ -254,9 +288,12 @@ export const AuthView = () => {
           <button
             type="button"
             onClick={handleLinkedInSignIn}
-            className="flex h-12 items-center justify-center gap-2 rounded-xl border border-[#0A66C2] bg-[#0A66C2] font-semibold text-white transition hover:border-[#094d92] hover:bg-[#094d92]"
+            className="group relative flex h-12 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-amber-200 via-amber-300 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-100 hover:via-amber-200 hover:to-orange-300"
           >
-            {copy.linkedin}
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-sm font-bold uppercase tracking-wide text-slate-900 transition group-hover:bg-white">
+              in
+            </span>
+            <span>{copy.linkedin}</span>
           </button>
 
           <div className="space-y-4 rounded-2xl border border-white/15 bg-white/5 p-6">
@@ -276,20 +313,62 @@ export const AuthView = () => {
             </div>
 
             {authMode === "signUp" && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/50" htmlFor="fullName">
-                  {copy.fullNameLabel}
-                </label>
-                <input
-                  id="fullName"
-                  type="text"
-                  autoComplete="name"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/5"
-                  placeholder={copy.fullNamePlaceholder}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-white/50" htmlFor="fullName">
+                    {copy.fullNameLabel}
+                  </label>
+                  <input
+                    id="fullName"
+                    type="text"
+                    autoComplete="name"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/5"
+                    placeholder={copy.fullNamePlaceholder}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-white/50" htmlFor="mathLevel">
+                    {copy.mathLevelLabel}
+                  </label>
+                  <select
+                    id="mathLevel"
+                    value={mathLevel}
+                    onChange={(event) => setMathLevel(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/5"
+                  >
+                    <option value="" disabled hidden>
+                      {copy.mathLevelPlaceholder}
+                    </option>
+                    {copy.mathLevels.map((level) => (
+                      <option key={level.value} value={level.value} className="text-background">
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-white/50" htmlFor="occupation">
+                    {copy.occupationLabel}
+                  </label>
+                  <select
+                    id="occupation"
+                    value={occupation}
+                    onChange={(event) => setOccupation(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/5"
+                  >
+                    <option value="" disabled hidden>
+                      {copy.occupationPlaceholder}
+                    </option>
+                    {copy.occupations.map((item) => (
+                      <option key={item.value} value={item.value} className="text-background">
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="space-y-2">
@@ -311,7 +390,7 @@ export const AuthView = () => {
               type="button"
               onClick={handleSignInOrSignUp}
               disabled={!canSubmit || loading}
-              className="mt-2 flex h-12 items-center justify-center rounded-xl bg-white/80 font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-white/50"
+              className="mt-2 flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:from-amber-200 disabled:via-amber-200 disabled:to-amber-200 disabled:opacity-60"
             >
               {loading ? (
                 <span className="flex items-center gap-2 text-sm">

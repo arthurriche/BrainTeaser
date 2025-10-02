@@ -121,7 +121,6 @@ export function RiddleClient() {
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
-  const [scoreboardLoading, setScoreboardLoading] = useState(false);
 
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
@@ -150,51 +149,13 @@ export function RiddleClient() {
       setScoreResult(null);
       setShowScoreboard(false);
       setScoreboardError(null);
-
-      try {
-        const scoreboardResponse = await fetch(`/api/riddle-scoreboard?riddleId=${payload.id}&lang=${language}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        if (scoreboardResponse.ok) {
-          const scoreboardData = await scoreboardResponse.json();
-          if (scoreboardData?.hasScore) {
-            const estimatedRemaining = Math.max(
-              0,
-              (payload.duration ?? DEFAULT_DURATION) - (scoreboardData.duration ?? 0),
-            );
-            const merged = mergeScoreData(null, {
-              score: scoreboardData.score ?? 0,
-              rankingPercent: scoreboardData.rankingPercent ?? 0,
-              beatenPlayers: scoreboardData.beatenPlayers ?? 0,
-              totalPlayers: scoreboardData.totalPlayers ?? 0,
-              hintsUsed: scoreboardData.hintsUsed ?? 0,
-              timeSpent: scoreboardData.duration ?? 0,
-              userMessages: scoreboardData.msgCount ?? 1,
-              timeRemaining: estimatedRemaining,
-              hints: scoreboardData.hints ?? [],
-              resultImageURL: scoreboardData.resultImageURL ?? null,
-              officialAnswer: scoreboardData.officialAnswer ?? null,
-              question: scoreboardData.question ?? null,
-              riddleTitle: scoreboardData.riddleTitle ?? null,
-            });
-            setScoreResult(merged);
-            setShowScoreboard(true);
-            pause();
-            return;
-          }
-        }
-      } catch (scoreError) {
-        console.error(scoreError);
-      }
-
       start(payload.duration ?? DEFAULT_DURATION);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setLoading(false);
     }
-  }, [start, reset, language, pause]);
+  }, [start, reset]);
 
   useEffect(() => {
     void loadRiddle();
@@ -265,7 +226,13 @@ export function RiddleClient() {
         return;
       }
       const result = data as ScoreResult;
-      setScoreResult(result);
+      const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
+      const enhancedResult: ScoreResult = {
+        ...result,
+        hints: result.hints && result.hints.length > 0 ? result.hints : usedHints,
+        riddleTitle: result.riddleTitle ?? riddle.title ?? null,
+      };
+      setScoreResult(enhancedResult);
       pause();
       setShowScoreboard(true);
     } catch (err) {
@@ -277,14 +244,12 @@ export function RiddleClient() {
 
   const fetchScoreboard = useCallback(async () => {
     if (!riddle) return;
-    setScoreboardLoading(true);
     setScoreboardError(null);
     try {
       const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}&lang=${language}`, { cache: "no-store", credentials: "include" });
       if (response.status === 401) {
         setScoreboardError(t("scoreboardErrors.auth"));
         setShowScoreboard(true);
-        setScoreboardLoading(false);
         return;
       }
       if (!response.ok) {
@@ -295,7 +260,6 @@ export function RiddleClient() {
       if (data?.requiresAuth) {
         setScoreboardError(data.error ?? t("scoreboardErrors.auth"));
         setShowScoreboard(true);
-        setScoreboardLoading(false);
         return;
       }
       if (data?.hasScore) {
@@ -327,8 +291,6 @@ export function RiddleClient() {
     } catch (err) {
       setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
       setShowScoreboard(true);
-    } finally {
-      setScoreboardLoading(false);
     }
   }, [riddle, scoreResult, hints, revealedHints, t, language]);
 
@@ -375,7 +337,7 @@ export function RiddleClient() {
         </div>
         <button
           type="button"
-          className="rounded-full bg-white/80 px-6 py-2 text-sm font-semibold text-background transition hover:bg-white"
+          className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
           onClick={loadRiddle}
         >
           {t("error.cta")}
@@ -641,22 +603,12 @@ export function RiddleClient() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  className="rounded-full bg-white/80 px-5 py-2 text-sm font-semibold text-background transition hover:bg-white"
+                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
                   onClick={handleSubmitAnswer}
                   disabled={submittingAnswer || Boolean(scoreResult)}
                 >
                   {submittingAnswer ? t("riddle.submitLoading") : t("riddle.submit")}
                 </button>
-                {!scoreResult && (
-                  <button
-                    type="button"
-                    className="rounded-full border border-white/30 px-5 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-                    onClick={fetchScoreboard}
-                    disabled={scoreboardLoading}
-                  >
-                    {scoreboardLoading ? t("scoreboardControls.viewLoading") : t("scoreboardControls.view")}
-                  </button>
-                )}
               </div>
             </section>
 

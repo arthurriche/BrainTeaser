@@ -99,27 +99,26 @@ export async function GET(request: Request) {
       riddle?.question ?? "",
       existingScore.score ?? 0,
       difficultyLabel,
-      { eager: false },
     );
 
-    const totalResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .gt("score", 0);
-
-    const lowerResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .gt("score", 0)
-      .lt("score", existingScore.score ?? 0);
-
-    const equalResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .eq("score", existingScore.score ?? 0);
+    const [totalResponse, lowerResponse, equalResponse] = await Promise.all([
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .gt("score", 0),
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .gt("score", 0)
+        .lt("score", existingScore.score ?? 0),
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .eq("score", existingScore.score ?? 0),
+    ]);
 
     const totalPlayers = totalResponse.count ?? 0;
     const beatenPlayers = lowerResponse.count ?? 0;

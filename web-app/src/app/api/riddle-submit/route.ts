@@ -201,24 +201,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: messages.saveError }, { status: 500 });
     }
 
-    const totalResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .gt("score", 0);
-
-    const lowerResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .gt("score", 0)
-      .lt("score", score);
-
-    const equalResponse = await supabase
-      .from("scores")
-      .select("score", { count: "exact", head: true })
-      .eq("riddle_id", riddleId)
-      .eq("score", score);
+    const [totalResponse, lowerResponse, equalResponse] = await Promise.all([
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .gt("score", 0),
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .gt("score", 0)
+        .lt("score", score),
+      supabase
+        .from("scores")
+        .select("score", { count: "exact", head: true })
+        .eq("riddle_id", riddleId)
+        .eq("score", score),
+    ]);
 
     const totalPlayers = totalResponse.count ?? 0;
     const beatenPlayers = lowerResponse.count ?? 0;
@@ -244,7 +244,6 @@ export async function POST(request: Request) {
       riddle.question ?? "",
       score,
       difficultyLabel,
-      { eager: false },
     );
 
     const openaiClient = getJudgeOpenAIClient();
