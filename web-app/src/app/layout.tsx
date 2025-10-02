@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
+import { LanguageProvider } from "@/components/providers/LanguageProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -20,9 +21,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
-      <body className={`${inter.variable} min-h-screen bg-background text-foreground antialiased`}> 
-        <SupabaseProvider>{children}</SupabaseProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} min-h-screen bg-background text-foreground antialiased`}>
+        <LanguageProvider>
+          <SupabaseProvider>{children}</SupabaseProvider>
+        </LanguageProvider>
       </body>
     </html>
   );
