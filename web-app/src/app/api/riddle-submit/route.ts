@@ -132,7 +132,7 @@ export async function POST(request: Request) {
 
     const { data: riddle, error: riddleError } = await supabase
       .from("riddles")
-      .select("question,answer,hint1,hint2,hint3,duration,difficulty")
+      .select("title,question,answer,hint1,hint2,hint3,duration,difficulty")
       .eq("id", riddleId)
       .maybeSingle();
 
@@ -276,6 +276,9 @@ export async function POST(request: Request) {
       resultImageURL,
       judgeConfidence: judgeEvaluation?.confidence ?? null,
       judgeMissingElements: missingElements,
+      officialAnswer: riddle.answer ?? null,
+      question: riddle.question ?? null,
+      riddleTitle: riddle.title ?? null,
     });
   } catch (error) {
     console.error(error);

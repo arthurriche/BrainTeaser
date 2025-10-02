@@ -70,7 +70,7 @@ export async function GET(request: Request) {
 
     const { data: riddle, error: riddleError } = await supabase
       .from("riddles")
-      .select("question,hint1,hint2,hint3,difficulty,duration")
+      .select("title,question,answer,hint1,hint2,hint3,difficulty,duration")
       .eq("id", riddleId)
       .maybeSingle();
 
@@ -139,6 +139,9 @@ export async function GET(request: Request) {
       rankingPercent,
       hints,
       resultImageURL,
+      question: riddle?.question ?? null,
+      officialAnswer: riddle?.answer ?? null,
+      riddleTitle: riddle?.title ?? null,
     });
   } catch (error) {
     console.error(error);

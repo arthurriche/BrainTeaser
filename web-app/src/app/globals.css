@@ -1,35 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: 248 58% 6%;
-  --foreground: 210 40% 96%;
-  --muted: 248 32% 18%;
-  --muted-foreground: 258 25% 72%;
-  --border: 248 32% 24%;
-  --input: 248 32% 24%;
-  --primary: 265 84% 64%;
-  --primary-foreground: 210 36% 98%;
-  --accent: 199 88% 62%;
-  --accent-foreground: 212 75% 97%;
+  --background: 36 63% 7%;
+  --foreground: 45 96% 96%;
+  --muted: 35 42% 18%;
+  --muted-foreground: 40 28% 76%;
+  --border: 33 38% 24%;
+  --input: 33 38% 24%;
+  --primary: 39 92% 58%;
+  --primary-foreground: 32 96% 16%;
+  --accent: 27 96% 56%;
+  --accent-foreground: 40 100% 95%;
   --destructive: 0 84% 62%;
   --destructive-foreground: 0 0% 98%;
-  --ring: 265 84% 64%;
+  --ring: 38 92% 58%;
 }
 
 .dark {
-  --background: 248 58% 6%;
-  --foreground: 210 40% 96%;
-  --muted: 248 32% 18%;
-  --muted-foreground: 258 25% 72%;
-  --border: 248 32% 24%;
-  --input: 248 32% 24%;
-  --primary: 265 84% 64%;
-  --primary-foreground: 210 40% 98%;
-  --accent: 199 88% 62%;
-  --accent-foreground: 212 75% 97%;
+  --background: 36 63% 7%;
+  --foreground: 45 96% 96%;
+  --muted: 35 42% 18%;
+  --muted-foreground: 40 28% 76%;
+  --border: 33 38% 24%;
+  --input: 33 38% 24%;
+  --primary: 39 92% 58%;
+  --primary-foreground: 32 96% 16%;
+  --accent: 27 96% 56%;
+  --accent-foreground: 40 100% 95%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 0 85.7% 97.3%;
-  --ring: 265 84% 64%;
+  --ring: 38 92% 58%;
 }
 
 @theme inline {
@@ -59,18 +59,18 @@ body::after {
   position: fixed;
   inset: -20vh;
   pointer-events: none;
-  background: radial-gradient(circle at top right, rgba(108, 99, 255, 0.68), rgba(43, 12, 78, 0.32) 45%, transparent 70%),
-    radial-gradient(circle at 20% 80%, rgba(64, 180, 255, 0.48), transparent 60%);
+  background: radial-gradient(circle at top right, rgba(255, 191, 0, 0.65), rgba(120, 66, 0, 0.28) 45%, transparent 70%),
+    radial-gradient(circle at 18% 78%, rgba(255, 139, 61, 0.45), transparent 60%);
   filter: blur(70px);
-  opacity: 0.85;
+  opacity: 0.9;
   z-index: -2;
   animation: aurora-shift 18s ease-in-out infinite alternate;
 }
 
 body::after {
   inset: -35vh;
-  background: radial-gradient(circle at 75% 25%, rgba(226, 204, 255, 0.55), transparent 60%),
-    radial-gradient(circle at 35% 65%, rgba(92, 238, 230, 0.34), transparent 60%);
+  background: radial-gradient(circle at 70% 25%, rgba(255, 215, 128, 0.55), transparent 60%),
+    radial-gradient(circle at 40% 68%, rgba(255, 153, 0, 0.35), transparent 60%);
   animation-duration: 24s;
   mix-blend-mode: screen;
 }
@@ -92,19 +92,19 @@ body::after {
 }
 
 .glass-panel {
-  @apply rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-2xl shadow-[0_35px_110px_rgba(42,24,88,0.35)];
+  @apply rounded-[28px] border border-amber-200/20 bg-[rgba(255,255,255,0.06)] backdrop-blur-2xl shadow-[0_35px_110px_rgba(81,45,0,0.35)];
 }
 
 .elevated-card {
-  @apply rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-2xl shadow-[0_30px_100px_rgba(26,16,59,0.45)];
+  @apply rounded-3xl border border-amber-200/25 bg-gradient-to-br from-amber-400/10 via-amber-300/5 to-transparent backdrop-blur-2xl shadow-[0_30px_100px_rgba(92,54,0,0.45)];
 }
 
 .glow-divider {
-  @apply h-px w-full bg-gradient-to-r from-transparent via-white/40 to-transparent;
+  @apply h-px w-full bg-gradient-to-r from-transparent via-amber-200/60 to-transparent;
 }
 
 .muted-label {
-  @apply text-[11px] font-semibold uppercase tracking-[0.5em] text-white/50;
+  @apply text-[11px] font-semibold uppercase tracking-[0.5em] text-amber-100/70;
 }
 
 @keyframes aurora-shift {

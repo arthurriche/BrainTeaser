@@ -3,9 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
@@ -166,32 +164,41 @@ export const RiddleIntro = () => {
             <button
               type="button"
               onClick={() => router.push("/riddle")}
-              className="rounded-full bg-white/80 px-6 py-3 text-base font-semibold text-background transition hover:bg-white"
+              className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
             >
               {t("intro.primaryCta")}
             </button>
           </article>
 
           <div className="flex flex-col gap-6">
-            <div className="glass-panel flex-1 overflow-hidden">
-              {riddle?.imageURL ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={riddle.imageURL}
-                  alt={riddle?.title ?? "Riddle illustration"}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-white/60">
-                  {t("intro.imagePlaceholder")}
-                </div>
-              )}
-            </div>
-            <div className="glass-panel max-h-[360px] overflow-y-auto p-8 text-white/80">
-              <p className="muted-label">{language === "fr" ? "Énoncé" : "Prompt"}</p>
-              <div className="mt-4 prose prose-invert max-w-none text-base leading-relaxed text-white/80">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{riddle?.question ?? ""}</ReactMarkdown>
+            <div className="glass-panel flex flex-1 flex-col items-center justify-center gap-4 px-8 py-12 text-center text-white/80">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-300/20 text-amber-100">
+                <Lock className="h-8 w-8" />
               </div>
+              <p className="text-lg font-semibold text-white">{t("intro.lockedTitle")}</p>
+              <p className="max-w-sm text-sm text-white/70">{t("intro.lockedDescription")}</p>
+            </div>
+            <div className="glass-panel space-y-4 p-8 text-left text-white/80">
+              <p className="text-sm font-semibold uppercase tracking-[0.35em] text-amber-100/70">
+                {language === "fr" ? "Avant de commencer" : "Before you start"}
+              </p>
+              <ul className="space-y-2 text-sm text-white/70">
+                <li className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-3">
+                  {language === "fr"
+                    ? "Installe-toi dans un endroit calme. Tu auras 45 minutes environ."
+                    : "Find a quiet spot. Expect about 45 minutes."}
+                </li>
+                <li className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-3">
+                  {language === "fr"
+                    ? "Clique sur le bouton quand tu es prêt : le chrono démarre tout de suite."
+                    : "Press the button when ready—the timer starts immediately."}
+                </li>
+                <li className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-3">
+                  {language === "fr"
+                    ? "Tu pourras demander des indices mais ils font baisser le score."
+                    : "Hints are available, but each one lowers your score."}
+                </li>
+              </ul>
             </div>
           </div>
         </section>

@@ -21,21 +21,25 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     nav: {
       tagline: "Sharpen your mind daily",
       languageToggle: "Switch to French",
+      logout: "Log out",
     },
     intro: {
-      badge: "Today's enigma",
-      heroTitle: "Your daily duel",
-      heroHighlight: "A 45-minute ritual to stretch your logic.",
+      badge: "Today's brain teaser",
+      heroTitle: "Ready to focus?",
+      heroHighlight: "Solve one brain teaser in about 45 minutes.",
       heroDescription:
-        "Each dawn the Master handcrafts a new challenge. Study the prompt, align your deductions and commit to your answer before the clock fades.",
-      primaryCta: "Enter the arena",
+        "Take a calm moment, read the brief overview, then launch the challenge when you feel prepared.",
+      primaryCta: "Start the brain teaser",
       retry: "Refresh",
       info: {
         durationLabel: "Recommended duration",
         progressionLabel: "Puzzle",
         dateLabel: "Published",
       },
-      imagePlaceholder: "Illustration warming up…",
+      imagePlaceholder: "Picture will unlock once you start.",
+      lockedTitle: "The statement is hidden",
+      lockedDescription:
+        "You will see the full question and visual as soon as you press “Start the brain teaser”.",
       emptyTitle: "No puzzle available",
       emptyDescription: "Return tomorrow for the next duel.",
     },
@@ -65,6 +69,8 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       loading: "Computing the ranking…",
       support: "Support via Apple Pay (€0.30)",
       backHome: "Back to home",
+      questionTitle: "Question",
+      solutionTitle: "Official solution",
     },
     scoreboardErrors: {
       generic: "Unable to retrieve the leaderboard.",
@@ -113,21 +119,25 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     nav: {
       tagline: "Aiguise ton esprit chaque jour",
       languageToggle: "Switch to English",
+      logout: "Se déconnecter",
     },
     intro: {
-      badge: "Énigme du jour",
-      heroTitle: "Ton duel quotidien",
-      heroHighlight: "45 minutes pour étirer ton intuition.",
+      badge: "Brain teaser du jour",
+      heroTitle: "Prêt à te concentrer ?",
+      heroHighlight: "Résous un brain teaser en 45 minutes environ.",
       heroDescription:
-        "Chaque matin, le Maître forge un nouveau défi. Observe l'énoncé, aligne tes déductions et engage ta réponse avant la fin du chrono.",
-      primaryCta: "Entrer dans l'arène",
+        "Prends un moment de calme, découvre le contexte, puis lance le défi quand tu es prêt.",
+      primaryCta: "Commencer le brain teaser",
       retry: "Actualiser",
       info: {
         durationLabel: "Durée recommandée",
         progressionLabel: "Énigme",
         dateLabel: "Publié",
       },
-      imagePlaceholder: "Illustration en préparation…",
+      imagePlaceholder: "L'illustration se dévoile au lancement.",
+      lockedTitle: "L'énoncé est masqué",
+      lockedDescription:
+        "Tu verras la question complète et l'image dès que tu cliqueras sur “Commencer le brain teaser”.",
       emptyTitle: "Aucune énigme disponible",
       emptyDescription: "Reviens demain pour poursuivre le duel.",
     },
@@ -157,6 +167,8 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       loading: "Calcul du classement…",
       support: "Soutenir via Apple Pay (0,30 €)",
       backHome: "Retour à l'accueil",
+      questionTitle: "Énoncé",
+      solutionTitle: "Solution détaillée",
     },
     scoreboardErrors: {
       generic: "Impossible de récupérer le classement.",

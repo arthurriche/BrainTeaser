@@ -40,6 +40,9 @@ interface ScoreResult {
   resultImageURL?: string | null;
   judgeConfidence?: number | null;
   judgeMissingElements?: string[];
+  question?: string | null;
+  officialAnswer?: string | null;
+  riddleTitle?: string | null;
 }
 
 const DIFFICULTY_MAP: Record<number, { en: string; fr: string }> = {
@@ -82,6 +85,9 @@ const mergeScoreData = (
   resultImageURL: overrides.resultImageURL ?? base?.resultImageURL ?? null,
   judgeConfidence: overrides.judgeConfidence ?? base?.judgeConfidence ?? null,
   judgeMissingElements: overrides.judgeMissingElements ?? base?.judgeMissingElements ?? [],
+  question: overrides.question ?? base?.question ?? null,
+  officialAnswer: overrides.officialAnswer ?? base?.officialAnswer ?? null,
+  riddleTitle: overrides.riddleTitle ?? base?.riddleTitle ?? null,
 });
 
 const useViewportSize = () => {
@@ -122,11 +128,12 @@ export function RiddleClient() {
   const viewport = useViewportSize();
 
   const [countdownState, countdownControls] = useCountdown();
-  const { start, pause } = countdownControls;
+  const { start, pause, reset } = countdownControls;
 
   const loadRiddle = useCallback(async () => {
     setLoading(true);
     setError(null);
+    reset();
     try {
       const response = await fetch("/api/riddle-today", { cache: "no-store" });
       if (!response.ok) {
@@ -138,18 +145,56 @@ export function RiddleClient() {
         throw new Error("No riddle available");
       }
       setRiddle(payload);
-      start(payload.duration ?? DEFAULT_DURATION);
       setRevealedHints([]);
       setUserAnswer("");
       setScoreResult(null);
       setShowScoreboard(false);
       setScoreboardError(null);
+
+      try {
+        const scoreboardResponse = await fetch(`/api/riddle-scoreboard?riddleId=${payload.id}&lang=${language}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (scoreboardResponse.ok) {
+          const scoreboardData = await scoreboardResponse.json();
+          if (scoreboardData?.hasScore) {
+            const estimatedRemaining = Math.max(
+              0,
+              (payload.duration ?? DEFAULT_DURATION) - (scoreboardData.duration ?? 0),
+            );
+            const merged = mergeScoreData(null, {
+              score: scoreboardData.score ?? 0,
+              rankingPercent: scoreboardData.rankingPercent ?? 0,
+              beatenPlayers: scoreboardData.beatenPlayers ?? 0,
+              totalPlayers: scoreboardData.totalPlayers ?? 0,
+              hintsUsed: scoreboardData.hintsUsed ?? 0,
+              timeSpent: scoreboardData.duration ?? 0,
+              userMessages: scoreboardData.msgCount ?? 1,
+              timeRemaining: estimatedRemaining,
+              hints: scoreboardData.hints ?? [],
+              resultImageURL: scoreboardData.resultImageURL ?? null,
+              officialAnswer: scoreboardData.officialAnswer ?? null,
+              question: scoreboardData.question ?? null,
+              riddleTitle: scoreboardData.riddleTitle ?? null,
+            });
+            setScoreResult(merged);
+            setShowScoreboard(true);
+            pause();
+            return;
+          }
+        }
+      } catch (scoreError) {
+        console.error(scoreError);
+      }
+
+      start(payload.duration ?? DEFAULT_DURATION);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setLoading(false);
     }
-  }, [start]);
+  }, [start, reset, language, pause]);
 
   useEffect(() => {
     void loadRiddle();
@@ -254,17 +299,24 @@ export function RiddleClient() {
         return;
       }
       if (data?.hasScore) {
+        const estimatedRemaining = Math.max(
+          0,
+          (riddle?.duration ?? DEFAULT_DURATION) - (data.duration ?? scoreResult?.timeSpent ?? 0),
+        );
         const merged = mergeScoreData(scoreResult, {
           score: data.score ?? 0,
           rankingPercent: data.rankingPercent ?? 0,
           beatenPlayers: data.beatenPlayers ?? 0,
           totalPlayers: data.totalPlayers ?? 0,
           hintsUsed: data.hintsUsed ?? scoreResult?.hintsUsed ?? revealedHints.length,
-          timeSpent: data.duration ?? scoreResult?.timeSpent ?? countdownState.totalDuration,
+          timeSpent: data.duration ?? scoreResult?.timeSpent ?? 0,
           userMessages: data.msgCount ?? scoreResult?.userMessages ?? 1,
-          timeRemaining: scoreResult?.timeRemaining ?? countdownState.timeRemaining,
+          timeRemaining: scoreResult?.timeRemaining ?? estimatedRemaining,
           hints: data.hints ?? scoreResult?.hints ?? hints,
           resultImageURL: data.resultImageURL ?? scoreResult?.resultImageURL ?? null,
+          officialAnswer: data.officialAnswer ?? scoreResult?.officialAnswer ?? null,
+          question: data.question ?? scoreResult?.question ?? null,
+          riddleTitle: data.riddleTitle ?? scoreResult?.riddleTitle ?? null,
         });
         setScoreResult(merged);
         setShowScoreboard(true);
@@ -278,7 +330,7 @@ export function RiddleClient() {
     } finally {
       setScoreboardLoading(false);
     }
-  }, [riddle, scoreResult, countdownState.totalDuration, countdownState.timeRemaining, hints, revealedHints, t, language]);
+  }, [riddle, scoreResult, hints, revealedHints, t, language]);
 
   useEffect(() => {
     if (!showScoreboard && countdownState.timeRemaining === 0) {
@@ -352,6 +404,9 @@ export function RiddleClient() {
               <div className="animate-fade-up space-y-3">
                 <span className="muted-label">{t("scoreboard.badge")}</span>
                 <h1 className="text-4xl font-semibold text-white">{t("scoreboard.heading", { id: riddle?.id })}</h1>
+                {scoreResult?.riddleTitle && (
+                  <p className="text-base text-amber-100/80">{scoreResult.riddleTitle}</p>
+                )}
               </div>
 
               {scoreResult?.resultImageURL && (
@@ -445,17 +500,45 @@ export function RiddleClient() {
                 )}
               </div>
 
+              <div className="glass-panel w-full space-y-8 p-10 text-left text-white/80">
+                <section className="space-y-3">
+                  <p className="muted-label">{t("scoreboard.questionTitle")}</p>
+                  <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {scoreResult?.question?.trim()?.length
+                        ? scoreResult.question
+                        : language === "fr"
+                          ? "L'énoncé détaillé sera bientôt disponible."
+                          : "The full question will be available soon."}
+                    </ReactMarkdown>
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <p className="muted-label">{t("scoreboard.solutionTitle")}</p>
+                  <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {scoreResult?.officialAnswer?.trim()?.length
+                        ? scoreResult.officialAnswer
+                        : language === "fr"
+                          ? "La solution détaillée arrive bientôt."
+                          : "The detailed solution will appear soon."}
+                    </ReactMarkdown>
+                  </div>
+                </section>
+              </div>
+
               <div className="flex flex-col items-center gap-4 text-sm text-white/70">
                 <button
                   type="button"
-                  className="rounded-full bg-white/80 px-6 py-3 text-base font-semibold text-background transition hover:bg-white"
+                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
                   onClick={() => window.alert(language === "fr" ? "Apple Pay arrive bientôt. Merci pour ton enthousiasme !" : "Apple Pay support is coming soon. Thanks for your enthusiasm!")}
                 >
                   {t("scoreboard.support")}
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-white/30 px-5 py-2 font-medium text-white transition hover:bg-white/10"
+                  className="rounded-full border border-amber-200/40 px-5 py-2 font-medium text-white transition hover:bg-amber-300/10"
                   onClick={() => window.location.assign("/")}
                 >
                   {t("scoreboard.backHome")}

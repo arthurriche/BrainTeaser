@@ -45,6 +45,8 @@ const getOpenAIClient = () => {
   return openaiClient;
 };
 
+export const getJudgeOpenAIClient = () => getOpenAIClient();
+
 const ensureBucket = async (client: SupabaseClient) => {
   const { data, error } = await client.storage.listBuckets();
   if (error) return;
