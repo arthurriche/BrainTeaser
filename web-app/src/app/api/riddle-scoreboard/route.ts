@@ -99,6 +99,7 @@ export async function GET(request: Request) {
       riddle?.question ?? "",
       existingScore.score ?? 0,
       difficultyLabel,
+      { eager: false },
     );
 
     const [totalResponse, lowerResponse, equalResponse] = await Promise.all([

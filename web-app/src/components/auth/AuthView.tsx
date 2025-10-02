@@ -190,23 +190,40 @@ export const AuthView = () => {
 
   const handleLinkedInSignIn = async () => {
     clearMessages();
-    try {
-      const redirectTo = `${window.location.origin}/auth/callback`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "linkedin_oidc",
+    setLoading(true);
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const startOAuth = async (provider: "linkedin" | "linkedin_oidc") => {
+      return supabase.auth.signInWithOAuth({
+        provider,
         options: {
           redirectTo,
           scopes: "openid profile email",
         },
       });
-      if (error) throw error;
+    };
+
+    try {
+      const { error } = await startOAuth("linkedin");
+      if (error) {
+        if (error.message?.toLowerCase().includes("provider not enabled")) {
+          const fallback = await startOAuth("linkedin_oidc");
+          if (fallback.error) throw fallback.error;
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
+      setLoading(false);
       setErrorMessage(
         error instanceof Error
           ? error.message
           : copy.linkedinError,
       );
+      return;
     }
+
+    setLoading(false);
   };
 
   const handleResetPassword = async () => {
