@@ -257,7 +257,7 @@ export const AuthView = () => {
     <div className="relative min-h-screen pb-24 text-white">
       <TopBar />
       <div className="mx-auto mt-16 flex w-full max-w-6xl flex-col gap-12 px-6 lg:flex-row">
-        <article className="relative flex-1 overflow-hidden rounded-[32px] border border-amber-200/30 bg-gradient-to-br from-amber-400/20 via-amber-300/10 to-transparent p-10 text-white">
+        <article className="animate-section animate-delay-1 relative flex-1 overflow-hidden rounded-[32px] border border-amber-200/30 bg-gradient-to-br from-amber-400/20 via-amber-300/10 to-transparent p-10 text-white">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20">
             <Image
               src="/Logo_Enigmate_Transparent.png"
@@ -274,7 +274,7 @@ export const AuthView = () => {
           </div>
         </article>
 
-        <section className="glass-panel flex-1 space-y-8 p-10">
+        <section className="glass-panel animate-section animate-delay-2 flex-1 space-y-8 p-10">
           <div className="flex gap-2 rounded-full bg-white/10 p-1 text-sm font-medium">
             <button
               type="button"
@@ -305,7 +305,7 @@ export const AuthView = () => {
           <button
             type="button"
             onClick={handleLinkedInSignIn}
-            className="group relative flex h-12 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-amber-200 via-amber-300 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-100 hover:via-amber-200 hover:to-orange-300"
+            className="button-aurora hover-lift group relative flex h-12 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-amber-200 via-amber-300 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-100 hover:via-amber-200 hover:to-orange-300"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-sm font-bold uppercase tracking-wide text-slate-900 transition group-hover:bg-white">
               in
@@ -313,7 +313,7 @@ export const AuthView = () => {
             <span>{copy.linkedin}</span>
           </button>
 
-          <div className="space-y-4 rounded-2xl border border-white/15 bg-white/5 p-6">
+            <div className="stagger-container space-y-4 rounded-2xl border border-white/15 bg-white/5 p-6">
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-white/50" htmlFor="email">
                 {copy.emailLabel}
@@ -407,7 +407,7 @@ export const AuthView = () => {
               type="button"
               onClick={handleSignInOrSignUp}
               disabled={!canSubmit || loading}
-              className="mt-2 flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:from-amber-200 disabled:via-amber-200 disabled:to-amber-200 disabled:opacity-60"
+              className="button-aurora hover-lift mt-2 flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:from-amber-200 disabled:via-amber-200 disabled:to-amber-200 disabled:opacity-60"
             >
               {loading ? (
                 <span className="flex items-center gap-2 text-sm">

@@ -25,7 +25,7 @@ const normalizeAnswer = (value: string) =>
     .replace(NORMALIZE_REGEX, " ")
     .trim();
 
-type GenericSupabaseClient = SupabaseClient<unknown, "public", unknown>;
+type GenericSupabaseClient = SupabaseClient;
 
 const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
@@ -87,6 +87,15 @@ export async function POST(request: Request) {
     const hintsUsed = Number.parseInt(String(body?.hintsUsed ?? "0"), 10) || 0;
     const userMessages = Number.parseInt(String(body?.userMessages ?? "0"), 10) || 0;
     const language: "en" | "fr" = body?.language === "fr" ? "fr" : "en";
+    console.log("[Submit] Incoming payload", {
+      riddleId,
+      answerLength: answer.length,
+      totalDuration,
+      timeRemainingRaw,
+      hintsUsed,
+      userMessages,
+      language,
+    });
     const messages = language === "fr"
       ? {
           invalidParams: "Paramètres invalides",
@@ -114,6 +123,7 @@ export async function POST(request: Request) {
         };
 
     if (Number.isNaN(riddleId) || riddleId <= 0 || answer.length === 0) {
+      console.warn("[Submit] Invalid parameters", { riddleId, answerLength: answer.length });
       return NextResponse.json({ error: messages.invalidParams }, { status: 400 });
     }
 
@@ -124,6 +134,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getSession();
 
     if (!session) {
+      console.warn("[Submit] Missing session", { riddleId });
       return NextResponse.json({
         error: messages.authRequired,
         requiresAuth: true,
@@ -132,20 +143,29 @@ export async function POST(request: Request) {
 
     const { data: riddle, error: riddleError } = await supabase
       .from("riddles")
-      .select("title,question,answer,hint1,hint2,hint3,duration,difficulty")
+      .select("title,question,solution,hint1,hint2,hint3,duration,difficulty")
       .eq("id", riddleId)
       .maybeSingle();
 
     if (riddleError || !riddle) {
+      console.error("[Submit] Riddle lookup failed", { riddleId }, riddleError);
       return NextResponse.json({ error: messages.riddleNotFound }, { status: 404 });
     }
+
+    console.log("[Submit] Riddle fetched", {
+      riddleId,
+      hasQuestion: Boolean(riddle.question),
+      hasSolution: Boolean(riddle.solution),
+      duration: riddle.duration,
+      difficulty: riddle.difficulty,
+    });
 
     const hints = Array.isArray(body?.hints)
       ? body.hints.filter((hint: unknown): hint is string => typeof hint === 'string')
       : [riddle.hint1, riddle.hint2, riddle.hint3].filter((hint): hint is string => Boolean(hint));
 
     const normalizedUserAnswer = normalizeAnswer(answer);
-    const normalizedExpected = normalizeAnswer(riddle.answer ?? "");
+    const normalizedExpected = normalizeAnswer(riddle.solution ?? "");
     let correct = normalizedUserAnswer.length > 0 && normalizedUserAnswer === normalizedExpected;
     let judgeEvaluation = correct
       ? {
@@ -165,17 +185,28 @@ export async function POST(request: Request) {
     const hintPenalty = hintsUsed * 150;
     const chatPenalty = Math.max(0, (userMessages - 1) * 25);
 
-    if (!correct && normalizedUserAnswer.length > 0 && (riddle.answer ?? "").trim().length > 0) {
-      const calibration = await ensureDailyJudgeCalibration(riddleId, riddle.question ?? "", riddle.answer ?? "", language);
+    if (!correct && normalizedUserAnswer.length > 0 && (riddle.solution ?? "").trim().length > 0) {
+      console.log("[Submit] Delegating to judge", {
+        riddleId,
+        normalizedUserAnswerLength: normalizedUserAnswer.length,
+        hintCount: hints.length,
+      });
+      const calibration = await ensureDailyJudgeCalibration(riddleId, riddle.question ?? "", riddle.solution ?? "", language);
       judgeEvaluation = await evaluateAnswerWithJudge(
         riddleId,
         riddle.question ?? "",
-        riddle.answer ?? "",
+        riddle.solution ?? "",
         answer,
         calibration,
         hints,
         language,
       );
+      console.log("[Submit] Judge responded", {
+        riddleId,
+        isCorrect: judgeEvaluation?.isCorrect,
+        confidence: judgeEvaluation?.confidence,
+        missingCount: judgeEvaluation?.missingElements?.length ?? 0,
+      });
       correct = judgeEvaluation?.isCorrect ?? false;
     }
 
@@ -191,7 +222,6 @@ export async function POST(request: Request) {
           score,
           duration: timeSpent,
           msg_count: userMessages,
-          hint_count: hintsUsed,
         },
         { onConflict: "user_id,riddle_id" },
       );
@@ -227,6 +257,17 @@ export async function POST(request: Request) {
       ? Math.round(((beatenPlayers + tiedPlayers / 2) / totalPlayers) * 100)
       : 0;
 
+    console.log("[Submit] Score stored", {
+      riddleId,
+      userId: session.user.id,
+      score,
+      timeSpent,
+      hintsUsed,
+      totalPlayers,
+      beatenPlayers,
+      rankingPercent,
+    });
+
     const difficultyEntry = typeof riddle.difficulty === "number" ? DIFFICULTY_LABELS[riddle.difficulty] : null;
     const difficultyLabel = typeof riddle.difficulty === "number"
       ? difficultyEntry
@@ -239,12 +280,18 @@ export async function POST(request: Request) {
       : typeof riddle.difficulty === "string"
         ? riddle.difficulty
         : null;
-    const resultImageURL = await ensureResultImage(
+    const { url: resultImageURL, pending: imagePending } = await ensureResultImage(
       riddleId,
       riddle.question ?? "",
       score,
       difficultyLabel,
     );
+    console.log("[Submit] Result image status", {
+      riddleId,
+      userId: session.user.id,
+      hasUrl: Boolean(resultImageURL),
+      imagePending,
+    });
 
     const openaiClient = getJudgeOpenAIClient();
     const baseReasoning = judgeEvaluation?.reasoning?.trim();
@@ -261,7 +308,7 @@ export async function POST(request: Request) {
       feedback = await suggestWithLLM(openaiClient, riddle.question ?? '', answer, hints, feedback, language);
     }
 
-    return NextResponse.json({
+    const payload = {
       correct,
       score,
       feedback,
@@ -273,14 +320,25 @@ export async function POST(request: Request) {
       beatenPlayers,
       totalPlayers,
       resultImageURL,
+      imagePending,
       judgeConfidence: judgeEvaluation?.confidence ?? null,
       judgeMissingElements: missingElements,
-      officialAnswer: riddle.answer ?? null,
+      officialAnswer: riddle.solution ?? null,
       question: riddle.question ?? null,
       riddleTitle: riddle.title ?? null,
+    };
+    console.log("[Submit] Returning response", {
+      riddleId,
+      userId: session.user.id,
+      correct,
+      score,
+      rankingPercent,
+      imagePending,
+      hasImage: Boolean(resultImageURL),
     });
+    return NextResponse.json(payload);
   } catch (error) {
-    console.error(error);
+    console.error("[Submit] Unexpected error", error);
     return NextResponse.json({ error: messages.unexpected }, { status: 500 });
   }
 }

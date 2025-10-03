@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { ensureRiddleImage } from "@/lib/riddleImage";
+
 type EdgePayload = {
   id: number;
   question: string;
@@ -14,6 +16,7 @@ type DetailPayload = {
   hint1?: string | null;
   hint2?: string | null;
   hint3?: string | null;
+  image_path?: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -26,6 +29,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export async function GET() {
+  console.log("[RiddleToday] Fetching daily riddle");
   const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/riddle_today`, {
     method: "POST",
     headers: {
@@ -54,8 +58,13 @@ export async function GET() {
     );
   }
 
+  console.log("[RiddleToday] Edge function payload", {
+    riddleId: edgeData.id,
+    hasImageURL: Boolean(edgeData.imageURL),
+  });
+
   const detailResponse = await fetch(
-    `${supabaseUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty,release_date,hint1,hint2,hint3`,
+    `${supabaseUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty,release_date,hint1,hint2,hint3,image_path`,
     {
       headers: {
         apikey: supabaseAnonKey,
@@ -78,8 +87,24 @@ export async function GET() {
   const detailJson = (await detailResponse.json()) as DetailPayload[];
   const detail = detailJson?.[0] ?? {};
 
+  const ensuredImage = await ensureRiddleImage(
+    edgeData.id,
+    edgeData.question,
+    detail.image_path ?? null,
+  );
+
+  const imageURL = ensuredImage.url ?? edgeData.imageURL ?? null;
+
+  console.log("[RiddleToday] Illustration status", {
+    riddleId: edgeData.id,
+    generated: ensuredImage.generated,
+    imagePath: ensuredImage.imagePath,
+    hasUrl: Boolean(imageURL),
+  });
+
   return NextResponse.json({
     ...edgeData,
+    imageURL,
     title: detail.title ?? null,
     duration: detail.duration ?? null,
     difficulty: detail.difficulty ?? null,

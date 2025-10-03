@@ -43,6 +43,7 @@ interface ScoreResult {
   question?: string | null;
   officialAnswer?: string | null;
   riddleTitle?: string | null;
+  imagePending?: boolean;
 }
 
 const DIFFICULTY_MAP: Record<number, { en: string; fr: string }> = {
@@ -62,6 +63,10 @@ const formatSeconds = (seconds: number) => {
     .toString()
     .padStart(2, "0");
   return `${mins}:${secs}`;
+};
+
+const logRiddleClient = (...args: unknown[]) => {
+  console.log("[RiddleClient]", ...args);
 };
 
 const mergeScoreData = (
@@ -88,6 +93,7 @@ const mergeScoreData = (
   question: overrides.question ?? base?.question ?? null,
   officialAnswer: overrides.officialAnswer ?? base?.officialAnswer ?? null,
   riddleTitle: overrides.riddleTitle ?? base?.riddleTitle ?? null,
+  imagePending: overrides.imagePending ?? base?.imagePending ?? false,
 });
 
 const useViewportSize = () => {
@@ -121,6 +127,7 @@ export function RiddleClient() {
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
+  const [scoreboardRetryCount, setScoreboardRetryCount] = useState(0);
 
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
@@ -134,15 +141,22 @@ export function RiddleClient() {
     setError(null);
     reset();
     try {
+      logRiddleClient("Loading daily riddle");
       const response = await fetch("/api/riddle-today", { cache: "no-store" });
       if (!response.ok) {
         const body = await response.text();
+        logRiddleClient("Failed to load riddle", { status: response.status, body });
         throw new Error(body || "Unable to load the daily riddle.");
       }
       const payload = (await response.json()) as RiddlePayload | null;
       if (!payload) {
         throw new Error("No riddle available");
       }
+      logRiddleClient("Riddle loaded", {
+        riddleId: payload.id,
+        duration: payload.duration,
+        difficulty: payload.difficulty,
+      });
       setRiddle(payload);
       setRevealedHints([]);
       setUserAnswer("");
@@ -151,6 +165,7 @@ export function RiddleClient() {
       setScoreboardError(null);
       start(payload.duration ?? DEFAULT_DURATION);
     } catch (err) {
+      logRiddleClient("Error while loading riddle", err);
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setLoading(false);
@@ -195,11 +210,21 @@ export function RiddleClient() {
     setSubmittingAnswer(true);
     setShowScoreboard(false);
     setScoreboardError(null);
+    setScoreboardRetryCount(0);
 
     try {
+      logRiddleClient("Submitting answer", {
+        riddleId: riddle.id,
+        answerLength: userAnswer.length,
+        totalDuration: countdownState.totalDuration,
+        timeRemaining: countdownState.timeRemaining,
+        hintsUsed: revealedHints.length,
+        language,
+      });
       const response = await fetch("/api/riddle-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           riddleId: riddle.id,
           answer: userAnswer,
@@ -214,28 +239,39 @@ export function RiddleClient() {
 
       if (!response.ok) {
         const body = await response.text();
+        logRiddleClient("Submit failed", { status: response.status, body });
         throw new Error(body || t("scoreboardErrors.generic"));
       }
 
       const data = await response.json();
       if (data?.requiresAuth) {
+        logRiddleClient("Submit requires auth", { riddleId: riddle.id });
         setScoreResult(null);
         setScoreboardError(data.error ?? t("scoreboardErrors.auth"));
         setShowScoreboard(true);
         setSubmittingAnswer(false);
         return;
       }
-      const result = data as ScoreResult;
+      const result = data as ScoreResult & { imagePending?: boolean };
       const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
       const enhancedResult: ScoreResult = {
         ...result,
         hints: result.hints && result.hints.length > 0 ? result.hints : usedHints,
         riddleTitle: result.riddleTitle ?? riddle.title ?? null,
+        imagePending: result.imagePending ?? result.resultImageURL == null,
       };
+      logRiddleClient("Submit succeeded", {
+        riddleId: riddle.id,
+        score: enhancedResult.score,
+        imagePending: enhancedResult.imagePending,
+        hasImage: Boolean(enhancedResult.resultImageURL),
+        rankingPercent: enhancedResult.rankingPercent,
+      });
       setScoreResult(enhancedResult);
       pause();
       setShowScoreboard(true);
     } catch (err) {
+      logRiddleClient("Submit threw", err);
       setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
     } finally {
       setSubmittingAnswer(false);
@@ -244,20 +280,24 @@ export function RiddleClient() {
 
   const fetchScoreboard = useCallback(async () => {
     if (!riddle) return;
+    logRiddleClient("Fetching scoreboard", { riddleId: riddle.id, language });
     setScoreboardError(null);
     try {
       const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}&lang=${language}`, { cache: "no-store", credentials: "include" });
       if (response.status === 401) {
+        logRiddleClient("Scoreboard 401", { riddleId: riddle.id });
         setScoreboardError(t("scoreboardErrors.auth"));
         setShowScoreboard(true);
         return;
       }
       if (!response.ok) {
         const body = await response.text();
+        logRiddleClient("Scoreboard failed", { status: response.status, body });
         throw new Error(body || t("scoreboardErrors.generic"));
       }
       const data = await response.json();
       if (data?.requiresAuth) {
+        logRiddleClient("Scoreboard requires auth payload", { riddleId: riddle.id });
         setScoreboardError(data.error ?? t("scoreboardErrors.auth"));
         setShowScoreboard(true);
         return;
@@ -281,14 +321,27 @@ export function RiddleClient() {
           officialAnswer: data.officialAnswer ?? scoreResult?.officialAnswer ?? null,
           question: data.question ?? scoreResult?.question ?? null,
           riddleTitle: data.riddleTitle ?? scoreResult?.riddleTitle ?? null,
+          imagePending: data.imagePending ?? scoreResult?.imagePending ?? false,
+        });
+        logRiddleClient("Scoreboard fetched", {
+          riddleId: riddle.id,
+          score: merged.score,
+          rankingPercent: merged.rankingPercent,
+          imagePending: merged.imagePending,
+          hasImage: Boolean(merged.resultImageURL),
         });
         setScoreResult(merged);
+        if (merged.resultImageURL) {
+          setScoreboardRetryCount(0);
+        }
         setShowScoreboard(true);
       } else {
+        logRiddleClient("Scoreboard has no score", { riddleId: riddle.id });
         setScoreboardError(t("scoreboardErrors.none"));
         setShowScoreboard(true);
       }
     } catch (err) {
+      logRiddleClient("Scoreboard threw", err);
       setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
       setShowScoreboard(true);
     }
@@ -296,20 +349,41 @@ export function RiddleClient() {
 
   useEffect(() => {
     if (!showScoreboard && countdownState.timeRemaining === 0) {
+      logRiddleClient("Timer reached zero, requesting scoreboard");
       void fetchScoreboard();
       pause();
     }
   }, [countdownState.timeRemaining, fetchScoreboard, showScoreboard, pause]);
 
   useEffect(() => {
-    if (showScoreboard && scoreResult && !scoreResult.resultImageURL) {
-      const timer = setTimeout(() => {
-        void fetchScoreboard();
-      }, 4000);
-      return () => clearTimeout(timer);
+    if (!showScoreboard || !scoreResult || scoreResult.resultImageURL || scoreboardError || !scoreResult.imagePending) {
+      return undefined;
     }
-    return undefined;
-  }, [showScoreboard, scoreResult, fetchScoreboard]);
+
+    if (scoreboardRetryCount >= 3) {
+      logRiddleClient("Result image retry limit reached", { riddleId: riddle?.id });
+      setScoreboardError(
+        language === "fr"
+          ? "Illustration indisponible pour le moment."
+          : "Illustration unavailable right now.",
+      );
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setScoreboardRetryCount((count) => count + 1);
+      logRiddleClient("Retrying scoreboard for image", { riddleId: riddle?.id, retry: scoreboardRetryCount + 1 });
+      void fetchScoreboard();
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [showScoreboard, scoreResult, fetchScoreboard, scoreboardRetryCount, scoreboardError, language, riddle?.id]);
+
+  useEffect(() => {
+    if (scoreResult?.resultImageURL) {
+      logRiddleClient("Result image available", { riddleId: riddle?.id });
+      setScoreboardRetryCount(0);
+    }
+  }, [scoreResult?.resultImageURL, riddle?.id]);
 
   const scoreboardShouldDisplay = showScoreboard || Boolean(scoreResult);
 
@@ -357,13 +431,44 @@ export function RiddleClient() {
           )}
 
           {!hasScore ? (
-            <div className="glass-panel flex flex-col items-center gap-4 px-10 py-14 text-white/80">
-              <Loader2 className="h-10 w-10 animate-spin text-white" />
-              <p>{t("scoreboard.loading")}</p>
+            <div className="glass-panel animate-section flex flex-col items-center gap-4 px-10 py-14 text-white/80">
+              {scoreboardError ? (
+                <>
+                  <TriangleAlert className="h-10 w-10 text-rose-200" />
+                  <p className="text-base text-rose-100">{scoreboardError}</p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
+                      onClick={() => {
+                        logRiddleClient("Retrying scoreboard manually", { riddleId: riddle?.id });
+                        void fetchScoreboard();
+                      }}
+                    >
+                      {t("intro.retry")}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-white/20 px-6 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10"
+                      onClick={() => {
+                        logRiddleClient("Closing scoreboard after error", { riddleId: riddle?.id });
+                        setShowScoreboard(false);
+                      }}
+                    >
+                      {t("scoreboard.backHome")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-10 w-10 animate-spin text-white" />
+                  <p>{t("scoreboard.loading")}</p>
+                </>
+              )}
             </div>
           ) : (
             <>
-              <div className="animate-fade-up space-y-3">
+              <div className="animate-section animate-delay-1 space-y-3">
                 <span className="muted-label">{t("scoreboard.badge")}</span>
                 <h1 className="text-4xl font-semibold text-white">{t("scoreboard.heading", { id: riddle?.id })}</h1>
                 {scoreResult?.riddleTitle && (
@@ -372,7 +477,7 @@ export function RiddleClient() {
               </div>
 
               {scoreResult?.resultImageURL && (
-                <div className="elevated-card w-full overflow-hidden">
+                <div className="elevated-card animate-section animate-delay-2 w-full overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={scoreResult.resultImageURL}
@@ -382,7 +487,21 @@ export function RiddleClient() {
                 </div>
               )}
 
-              <div className="elevated-card w-full space-y-8 p-10 text-left text-white/80">
+              {!scoreResult?.resultImageURL && scoreResult?.imagePending && (
+                <div className="glass-panel animate-section animate-delay-2 flex w-full items-center justify-center gap-3 px-10 py-14 text-white/80">
+                  <Loader2 className="h-10 w-10 animate-spin text-white" />
+                  <div className="space-y-1 text-center text-sm">
+                    <p>{language === "fr" ? "Illustration en cours de génération…" : "Generating illustration…"}</p>
+                    <p className="text-xs text-white/60">
+                      {language === "fr"
+                        ? "Cela peut prendre quelques secondes."
+                        : "This may take a few seconds."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="elevated-card animate-section animate-delay-3 w-full space-y-8 p-10 text-left text-white/80">
                 <div className="space-y-3">
                   <p className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">{t("scoreboard.scoreLabel")}</p>
                   <p className="text-5xl font-semibold text-white">{scoreResult?.score ?? 0}</p>
@@ -493,14 +612,14 @@ export function RiddleClient() {
               <div className="flex flex-col items-center gap-4 text-sm text-white/70">
                 <button
                   type="button"
-                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
+                  className="button-aurora hover-lift rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
                   onClick={() => window.alert(language === "fr" ? "Apple Pay arrive bientôt. Merci pour ton enthousiasme !" : "Apple Pay support is coming soon. Thanks for your enthusiasm!")}
                 >
                   {t("scoreboard.support")}
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-amber-200/40 px-5 py-2 font-medium text-white transition hover:bg-amber-300/10"
+                  className="hover-lift rounded-full border border-amber-200/40 px-5 py-2 font-medium text-white transition hover:bg-amber-300/10"
                   onClick={() => window.location.assign("/")}
                 >
                   {t("scoreboard.backHome")}
@@ -517,7 +636,7 @@ export function RiddleClient() {
     <div className="relative min-h-screen pb-24 text-white">
       <TopBar />
       <main className="mx-auto mt-20 flex w-full max-w-6xl flex-col gap-12 px-6">
-        <header className="animate-fade-up space-y-6 text-center lg:text-left">
+        <header className="animate-section animate-delay-1 space-y-6 text-center lg:text-left">
           <span className="muted-label">{t("riddle.stageLabel")}</span>
           <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
             {riddle?.title ?? (language === "fr" ? "Énigme mystère" : "Mystery riddle")}
@@ -544,7 +663,7 @@ export function RiddleClient() {
         </header>
 
         <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="elevated-card space-y-8 p-10 text-left text-white/80">
+          <article className="elevated-card animate-section animate-delay-2 space-y-8 p-10 text-left text-white/80">
             <div className="flex flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.35em] text-white/50">
               <span>#{riddle?.id ?? 0}</span>
               <span>{difficultyLabel}</span>
@@ -559,30 +678,32 @@ export function RiddleClient() {
           </article>
 
           <div className="flex flex-col gap-6">
-            <TimerPanel
-              state={countdownState}
-              label={t("timer.label")}
-              helper={t("timer.helper")}
-              statusLabels={{
-                finished: t("timer.finished"),
-                critical: t("timer.critical"),
-                running: t("timer.running"),
-                idle: t("timer.idle"),
-              }}
-            />
+            <div className="animate-section animate-delay-3">
+              <TimerPanel
+                state={countdownState}
+                label={t("timer.label")}
+                helper={t("timer.helper")}
+                statusLabels={{
+                  finished: t("timer.finished"),
+                  critical: t("timer.critical"),
+                  running: t("timer.running"),
+                  idle: t("timer.idle"),
+                }}
+              />
+            </div>
 
             {riddle?.imageURL ? (
-              <div className="glass-panel overflow-hidden">
+              <div className="glass-panel animate-section animate-delay-3 overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={riddle.imageURL} alt={t("riddle.heroTitle") ?? "Riddle illustration"} className="h-72 w-full object-cover" />
               </div>
             ) : (
-              <div className="glass-panel flex h-72 items-center justify-center text-sm text-white/60">
+              <div className="glass-panel animate-section animate-delay-3 flex h-72 items-center justify-center text-sm text-white/60">
                 {language === "fr" ? "Illustration en cours de préparation…" : "Illustration loading soon…"}
               </div>
             )}
 
-            <section className="glass-panel space-y-4 p-8 text-white/80">
+            <section className="glass-panel animate-section animate-delay-4 space-y-4 p-8 text-white/80">
               <h3 className="text-lg font-semibold text-white">{t("riddle.answerLabel")}</h3>
               <textarea
                 className="min-h-[140px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/10"
@@ -603,7 +724,7 @@ export function RiddleClient() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
+                  className="button-aurora hover-lift rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
                   onClick={handleSubmitAnswer}
                   disabled={submittingAnswer || Boolean(scoreResult)}
                 >
@@ -612,7 +733,7 @@ export function RiddleClient() {
               </div>
             </section>
 
-            <section className="glass-panel space-y-5 p-8 text-white/80">
+            <section className="glass-panel animate-section animate-delay-5 space-y-5 p-8 text-white/80">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-white">{t("riddle.hintSectionTitle")}</h3>
                 {hasMoreHints && (

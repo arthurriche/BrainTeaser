@@ -138,21 +138,31 @@ export const ensureDailyJudgeCalibration = async (
   language: SupportedLanguage,
 ): Promise<JudgeCalibration | null> => {
   const openai = getOpenAIClient();
-  if (!openai) return buildDefaultCalibration(language);
+  if (!openai) {
+    console.log("[Judge] No OpenAI client available for calibration", { riddleId, language });
+    return buildDefaultCalibration(language);
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const key = cacheKey(riddleId, language);
   const cached = memoryCache.get(key);
   if (cached && cached.day === today) {
+    console.log("[Judge] Using cached calibration", { riddleId, language });
     return cached.calibration;
   }
 
   const client = getAdminClient();
   if (!client) {
+    console.log("[Judge] No admin client, generating calibration via OpenAI", { riddleId, language });
     const generated = await generateCalibration(openai, riddleId, question, answer, language);
     if (generated) {
       memoryCache.set(key, { day: today, calibration: generated });
     }
+    console.log("[Judge] Generated calibration without persistence", {
+      riddleId,
+      language,
+      success: Boolean(generated),
+    });
     return generated ?? buildDefaultCalibration(language);
   }
 
@@ -166,6 +176,7 @@ export const ensureDailyJudgeCalibration = async (
       const parsed = parseCalibration(text);
       if (parsed) {
         memoryCache.set(key, { day: today, calibration: parsed });
+        console.log("[Judge] Loaded calibration from storage", { riddleId, language });
         return parsed;
       }
     }
@@ -173,6 +184,7 @@ export const ensureDailyJudgeCalibration = async (
     // ignore missing file, we'll generate below
   }
 
+  console.log("[Judge] Generating new calibration", { riddleId, language });
   const generated = await generateCalibration(openai, riddleId, question, answer, language);
   if (!generated) return buildDefaultCalibration(language);
 
@@ -183,11 +195,13 @@ export const ensureDailyJudgeCalibration = async (
       contentType: "application/json",
       upsert: true,
     });
+    console.log("[Judge] Persisted calibration", { riddleId, language });
   } catch (error) {
     console.error("Failed to persist judge calibration", error);
   }
 
   memoryCache.set(key, { day: today, calibration: generated });
+  console.log("[Judge] Calibration ready", { riddleId, language });
   return generated;
 };
 
@@ -201,7 +215,14 @@ export const evaluateAnswerWithJudge = async (
   language: SupportedLanguage,
 ): Promise<JudgeEvaluation> => {
   const openai = getOpenAIClient();
+  console.log("[Judge] Starting evaluation", {
+    riddleId,
+    language,
+    hasCalibration: Boolean(calibration),
+    hintCount: hints.length,
+  });
   if (!openai) {
+    console.log("[Judge] No OpenAI client available. Fallback to default response");
     return {
       isCorrect: false,
       confidence: 0,
@@ -213,6 +234,7 @@ export const evaluateAnswerWithJudge = async (
     };
   }
 
+  const startedAt = Date.now();
   try {
     const completion = await openai.chat.completions.create({
       model: OPENAI_JUDGE_MODEL,
@@ -245,8 +267,12 @@ export const evaluateAnswerWithJudge = async (
       ],
     });
 
+    const durationMs = Date.now() - startedAt;
+    console.log("[Judge] OpenAI responded", { riddleId, durationMs });
+
     const payload = completion.choices[0]?.message?.content ?? "";
     if (!payload) {
+      console.log("[Judge] Empty payload received", { riddleId });
       return {
         isCorrect: false,
         confidence: 0,
@@ -258,10 +284,24 @@ export const evaluateAnswerWithJudge = async (
       };
     }
 
-    const parsed = JSON.parse(payload) as Partial<JudgeEvaluation> & {
-      is_correct?: boolean;
-      missing_elements?: unknown;
-    };
+    let parsed: Partial<JudgeEvaluation> & { is_correct?: boolean; missing_elements?: unknown };
+    try {
+      parsed = JSON.parse(payload) as Partial<JudgeEvaluation> & {
+        is_correct?: boolean;
+        missing_elements?: unknown;
+      };
+    } catch (parseError) {
+      console.error("[Judge] Failed to parse JSON payload", { riddleId, payload }, parseError);
+      return {
+        isCorrect: false,
+        confidence: 0,
+        reasoning:
+          language === "fr"
+            ? "Le juge n'a pas pu analyser la réponse (JSON invalide)."
+            : "The judge could not analyse the answer (invalid JSON).",
+        missingElements: [],
+      };
+    }
 
     const missingElements = Array.isArray(parsed.missing_elements)
       ? parsed.missing_elements.map((item) => String(item))
@@ -280,7 +320,7 @@ export const evaluateAnswerWithJudge = async (
       missingElements,
     };
   } catch (error) {
-    console.error("Judge evaluation failed", error);
+    console.error("[Judge] Evaluation failed", { riddleId }, error);
     return {
       isCorrect: false,
       confidence: 0,

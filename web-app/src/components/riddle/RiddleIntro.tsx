@@ -130,7 +130,7 @@ export const RiddleIntro = () => {
       <TopBar />
       <main className="mx-auto mt-20 flex w-full max-w-6xl flex-col gap-12 px-6">
         <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="elevated-card space-y-8 p-10 text-left text-white/80">
+          <article className="elevated-card animate-section animate-delay-1 space-y-8 p-10 text-left text-white/80">
             <div className="flex flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.35em] text-white/50">
               <span>{t("intro.badge")}</span>
               <span>{difficulty}</span>
@@ -164,21 +164,21 @@ export const RiddleIntro = () => {
             <button
               type="button"
               onClick={() => router.push("/riddle")}
-              className="rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
+              className="button-aurora hover-lift rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
             >
               {t("intro.primaryCta")}
             </button>
           </article>
 
           <div className="flex flex-col gap-6">
-            <div className="glass-panel flex flex-1 flex-col items-center justify-center gap-4 px-8 py-12 text-center text-white/80">
+            <div className="glass-panel animate-section animate-delay-2 flex flex-1 flex-col items-center justify-center gap-4 px-8 py-12 text-center text-white/80">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-300/20 text-amber-100">
                 <Lock className="h-8 w-8" />
               </div>
               <p className="text-lg font-semibold text-white">{t("intro.lockedTitle")}</p>
               <p className="max-w-sm text-sm text-white/70">{t("intro.lockedDescription")}</p>
             </div>
-            <div className="glass-panel space-y-4 p-8 text-left text-white/80">
+            <div className="glass-panel animate-section animate-delay-3 space-y-4 p-8 text-left text-white/80">
               <p className="text-sm font-semibold uppercase tracking-[0.35em] text-amber-100/70">
                 {language === "fr" ? "Avant de commencer" : "Before you start"}
               </p>

@@ -25,14 +25,14 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-3 z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-6 rounded-full border border-amber-200/30 bg-[rgba(255,255,255,0.08)] px-6 py-3 shadow-[0_25px_80px_rgba(120,70,5,0.35)] backdrop-blur-2xl transition-all duration-500 hover:border-amber-200/50">
-      <Link href="/" className="flex items-center gap-3 text-white">
+    <header className="ambient-glow sticky top-3 z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-6 rounded-full border border-amber-200/30 bg-[rgba(255,255,255,0.08)] px-6 py-3 shadow-[0_25px_80px_rgba(120,70,5,0.35)] backdrop-blur-2xl transition-all duration-500 hover:border-amber-200/50">
+      <Link href="/" className="group flex items-center gap-3 text-white">
         <div className="relative h-9 w-9 overflow-hidden rounded-2xl bg-amber-300/20 shadow-inner">
           <Image src="/Logo_Enigmate_Transparent.png" alt="Enigmate logo" fill sizes="40px" className="object-contain" />
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold tracking-[0.3em] text-amber-100/70">Enigmate</span>
-          <span className="text-xs text-white/70">{t("nav.tagline")}</span>
+          <span className="text-sm font-semibold tracking-[0.3em] text-amber-100/70 transition-colors duration-500 group-hover:text-white">Enigmate</span>
+          <span className="text-xs text-white/70 transition-colors duration-500 group-hover:text-white/90">{t("nav.tagline")}</span>
         </div>
       </Link>
 

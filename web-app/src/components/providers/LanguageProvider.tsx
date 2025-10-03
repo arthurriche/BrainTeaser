@@ -138,7 +138,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       emptyDescription: "Reviens demain pour poursuivre le duel.",
     },
     loading: {
-      title: "Invocation de l'énigme du jour…",
+      title: "Un brainteaser de kiffeur est en train de charger",
       subtitle: "Le Maître dispose les pièces, un instant.",
     },
     error: {
