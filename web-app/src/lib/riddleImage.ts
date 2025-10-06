@@ -94,12 +94,13 @@ const generateImageBuffer = async (question: string) => {
       size: "1024x1024",
     });
 
-    const base64 = response.data[0]?.b64_json;
+    const imagePayload = response.data?.[0];
+    const base64 = imagePayload?.b64_json;
     if (base64) {
       return Buffer.from(base64, "base64");
     }
 
-    const remoteUrl = response.data[0]?.url;
+    const remoteUrl = imagePayload?.url;
     if (remoteUrl) {
       const remoteResponse = await fetch(remoteUrl);
       if (!remoteResponse.ok) {
