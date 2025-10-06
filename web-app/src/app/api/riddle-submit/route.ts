@@ -78,6 +78,20 @@ ${prefix}${suggestion}`;
 };
 
 export async function POST(request: Request) {
+  let language: "en" | "fr" = "en";
+  let messages = {
+    invalidParams: "Invalid parameters",
+    authRequired: "Sign in to record your attempt.",
+    riddleNotFound: "Riddle not found",
+    saveError: "Unable to save the score",
+    unexpected: "Unexpected error",
+    correctReasoning: "Your answer matches the official solution.",
+    correctFallback: "Well done! Your answer matches the official solution.",
+    incorrectBase: "The proposed answer doesn't match.",
+    missingLabel: "Sharpen these points",
+    whisperPrefix: "The Master hints:",
+  };
+
   try {
     const body = await request.json();
     const riddleId = Number.parseInt(body?.riddleId ?? "", 10);
@@ -86,17 +100,8 @@ export async function POST(request: Request) {
     const timeRemainingRaw = Number.parseInt(String(body?.timeRemaining ?? "0"), 10) || 0;
     const hintsUsed = Number.parseInt(String(body?.hintsUsed ?? "0"), 10) || 0;
     const userMessages = Number.parseInt(String(body?.userMessages ?? "0"), 10) || 0;
-    const language: "en" | "fr" = body?.language === "fr" ? "fr" : "en";
-    console.log("[Submit] Incoming payload", {
-      riddleId,
-      answerLength: answer.length,
-      totalDuration,
-      timeRemainingRaw,
-      hintsUsed,
-      userMessages,
-      language,
-    });
-    const messages = language === "fr"
+    language = body?.language === "fr" ? "fr" : "en";
+    messages = language === "fr"
       ? {
           invalidParams: "Paramètres invalides",
           authRequired: "Connecte-toi pour enregistrer ta tentative.",
@@ -121,6 +126,15 @@ export async function POST(request: Request) {
           missingLabel: "Sharpen these points",
           whisperPrefix: "The Master hints:",
         };
+    console.log("[Submit] Incoming payload", {
+      riddleId,
+      answerLength: answer.length,
+      totalDuration,
+      timeRemainingRaw,
+      hintsUsed,
+      userMessages,
+      language,
+    });
 
     if (Number.isNaN(riddleId) || riddleId <= 0 || answer.length === 0) {
       console.warn("[Submit] Invalid parameters", { riddleId, answerLength: answer.length });
