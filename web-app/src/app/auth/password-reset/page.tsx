@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSupabase } from "@/components/providers/SupabaseProvider";
 
 export default function PasswordResetPage() {
-  const { supabase } = useSupabase();
+  const { supabase, configured } = useSupabase();
   const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,6 +21,11 @@ export default function PasswordResetPage() {
 
     if (newPassword !== confirmPassword) {
       setError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    if (!supabase) {
+      setError("Supabase n'est pas configuré.");
       return;
     }
 
@@ -91,9 +96,9 @@ export default function PasswordResetPage() {
           </button>
         </div>
 
-        {(error || message) && (
+        {(!configured || error || message) && (
           <p className={`mt-6 text-sm ${error ? "text-red-300" : "text-emerald-300"}`}>
-            {error ?? message}
+            {!configured ? "Supabase n'est pas configuré." : error ?? message}
           </p>
         )}
       </div>

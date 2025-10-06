@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 
-interface SupabaseContextValue {
+export interface SupabaseContextValue {
   supabase: SupabaseClient | null;
   session: Session | null;
   loading: boolean;
@@ -70,19 +70,12 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
   return <SupabaseContext.Provider value={value}>{children}</SupabaseContext.Provider>;
 };
 
-export const useSupabase = (): SupabaseContextValue & { supabase: SupabaseClient } => {
+export const useSupabase = (): SupabaseContextValue => {
   const context = useContext(SupabaseContext);
 
   if (!context) {
     throw new Error("useSupabase must be used within a SupabaseProvider");
   }
 
-  if (!context.supabase) {
-    throw new Error("Supabase is not configured. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.");
-  }
-
-  return {
-    ...context,
-    supabase: context.supabase,
-  };
+  return context;
 };

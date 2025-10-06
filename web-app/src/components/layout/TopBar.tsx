@@ -16,6 +16,7 @@ export function TopBar() {
 
   const handleSignOut = async () => {
     try {
+      if (!supabase) return;
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Failed to sign out", error);

@@ -2,7 +2,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useSupabase } from "@/components/providers/SupabaseProvider";
@@ -14,7 +14,7 @@ const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 type AuthMode = "signIn" | "signUp";
 
 export const AuthView = () => {
-  const { supabase } = useSupabase();
+  const { supabase, configured } = useSupabase();
   const { language } = useTranslations();
 
   const copy = useMemo(() => {
@@ -129,7 +129,26 @@ export const AuthView = () => {
     setInfoMessage(null);
   };
 
+  useEffect(() => {
+    if (!configured) {
+      setErrorMessage(
+        language === "fr"
+          ? "Connexion Supabase indisponible (variables d'environnement manquantes)."
+          : "Supabase connection unavailable (missing environment variables).",
+      );
+    }
+  }, [configured, language]);
+
   const handleSignInOrSignUp = async () => {
+    if (!supabase) {
+      setErrorMessage(
+        language === "fr"
+          ? "Connexion Supabase indisponible."
+          : "Supabase connection unavailable.",
+      );
+      return;
+    }
+
     if (!isValidEmail) {
       setErrorMessage(copy.invalidEmail);
       return;
@@ -192,6 +211,16 @@ export const AuthView = () => {
     clearMessages();
     setLoading(true);
     const redirectTo = `${window.location.origin}/auth/callback`;
+
+    if (!supabase) {
+      setErrorMessage(
+        language === "fr"
+          ? "Connexion Supabase indisponible."
+          : "Supabase connection unavailable.",
+      );
+      setLoading(false);
+      return;
+    }
 
     const startOAuth = async (provider: "linkedin" | "linkedin_oidc") => {
       console.log("[Auth] Starting LinkedIn OAuth", { provider, redirectTo });
@@ -334,6 +363,15 @@ export const AuthView = () => {
   const handleResetPassword = async () => {
     if (!isValidEmail) {
       setErrorMessage(copy.invalidEmail);
+      return;
+    }
+
+    if (!supabase) {
+      setErrorMessage(
+        language === "fr"
+          ? "Connexion Supabase indisponible."
+          : "Supabase connection unavailable.",
+      );
       return;
     }
 
