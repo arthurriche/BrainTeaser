@@ -2,22 +2,35 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabaseClient";
 
 interface SupabaseContextValue {
-  supabase: SupabaseClient;
+  supabase: SupabaseClient | null;
   session: Session | null;
   loading: boolean;
+  configured: boolean;
 }
 
 const SupabaseContext = createContext<SupabaseContextValue | undefined>(undefined);
 
 export const SupabaseProvider = ({ children }: { children: React.ReactNode }) => {
-  const supabase = useMemo(() => getSupabaseClient(), []);
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch (error) {
+      console.error("Supabase client unavailable", error);
+      return null;
+    }
+  }, []);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
 
     const init = async () => {
@@ -49,17 +62,27 @@ export const SupabaseProvider = ({ children }: { children: React.ReactNode }) =>
     };
   }, [supabase]);
 
-  const value = useMemo(() => ({ supabase, session, loading }), [supabase, session, loading]);
+  const value = useMemo(
+    () => ({ supabase, session, loading, configured: Boolean(supabase) && isSupabaseConfigured }),
+    [supabase, session, loading],
+  );
 
   return <SupabaseContext.Provider value={value}>{children}</SupabaseContext.Provider>;
 };
 
-export const useSupabase = () => {
+export const useSupabase = (): SupabaseContextValue & { supabase: SupabaseClient } => {
   const context = useContext(SupabaseContext);
 
   if (!context) {
     throw new Error("useSupabase must be used within a SupabaseProvider");
   }
 
-  return context;
+  if (!context.supabase) {
+    throw new Error("Supabase is not configured. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.");
+  }
+
+  return {
+    ...context,
+    supabase: context.supabase,
+  };
 };
