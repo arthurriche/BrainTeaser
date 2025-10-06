@@ -127,7 +127,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: messages.invalidParams }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     const supabase: GenericSupabaseClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const {
       data: { session },

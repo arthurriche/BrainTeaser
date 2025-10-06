@@ -14,7 +14,7 @@ const DIFFICULTY_LABELS: Record<number, { en: string; fr: string }> = {
 type GenericSupabaseClient = SupabaseClient;
 
 const createClient = async (): Promise<GenericSupabaseClient> => {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   return createRouteHandlerClient({ cookies: () => cookieStore });
 };
 
