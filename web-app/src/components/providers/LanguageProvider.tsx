@@ -36,7 +36,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     intro: {
       badge: "Today's brain teaser",
       heroTitle: "Ready to focus?",
-      heroHighlight: "Solve one brain teaser in about 45 minutes.",
+      heroHighlight: (params) => `Solve one brain teaser in about ${getNumberParam(params, "minutes") || "??"} minutes.`,
       heroDescription:
         "Take a calm moment, read the brief overview, then launch the challenge when you feel prepared.",
       primaryCta: "Start the brain teaser",
@@ -54,8 +54,8 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       emptyDescription: "Return tomorrow for the next duel.",
     },
     loading: {
-      title: "Summoning today's enigma…",
-      subtitle: "Hold tight, the Master is arranging the puzzle.",
+      title: "This riddle is seriously tough…",
+      subtitle: "Crack it and you're the GOAT.",
     },
     error: {
       title: "We couldn't load the puzzle",
@@ -133,7 +133,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     intro: {
       badge: "Brain teaser du jour",
       heroTitle: "Prêt à te concentrer ?",
-      heroHighlight: "Résous un brain teaser en 45 minutes environ.",
+      heroHighlight: (params) => `Résous un brain teaser en ${getNumberParam(params, "minutes") || "??"} minutes environ.`,
       heroDescription:
         "Prends un moment de calme, découvre le contexte, puis lance le défi quand tu es prêt.",
       primaryCta: "Commencer le brain teaser",
@@ -151,8 +151,8 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       emptyDescription: "Reviens demain pour poursuivre le duel.",
     },
     loading: {
-      title: "Un brainteaser de kiffeur est en train de charger",
-      subtitle: "Le Maître dispose les pièces, un instant.",
+      title: "Cette énigme est bien corsée…",
+      subtitle: "Si tu la réussis, t'es le GOAT.",
     },
     error: {
       title: "Impossible de charger l'énigme",

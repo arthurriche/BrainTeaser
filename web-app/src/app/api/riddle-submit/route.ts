@@ -16,6 +16,14 @@ const DIFFICULTY_LABELS: Record<number, { en: string; fr: string }> = {
 };
 
 const NORMALIZE_REGEX = /[\s\p{P}\p{S}]+/gu;
+const MAX_RAW_SCORE = 1100;
+
+const normalizeScore = (value: number | null | undefined) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  if (value <= 0) return 0;
+  if (value <= 100) return Math.round(value);
+  return Math.max(0, Math.min(100, Math.round((value / MAX_RAW_SCORE) * 100)));
+};
 
 const normalizeAnswer = (value: string) =>
   value
@@ -225,7 +233,8 @@ export async function POST(request: Request) {
     }
 
     const baseScore = correct ? 700 : 300;
-    const score = Math.max(0, baseScore + timeBonus - hintPenalty - chatPenalty);
+    const rawScore = Math.max(0, baseScore + timeBonus - hintPenalty - chatPenalty);
+    const score = normalizeScore(rawScore);
 
     const { error: upsertError } = await supabase
       .from("scores")
@@ -245,28 +254,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: messages.saveError }, { status: 500 });
     }
 
-    const [totalResponse, lowerResponse, equalResponse] = await Promise.all([
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .gt("score", 0),
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .gt("score", 0)
-        .lt("score", score),
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .eq("score", score),
-    ]);
+    const { data: scoreRows, error: scoreListError } = await supabase
+      .from("scores")
+      .select("score")
+      .eq("riddle_id", riddleId)
+      .gt("score", 0);
 
-    const totalPlayers = totalResponse.count ?? 0;
-    const beatenPlayers = lowerResponse.count ?? 0;
-    const tiedPlayers = equalResponse.count ?? 0;
+    if (scoreListError) {
+      console.error("[Submit] Failed to list scores", scoreListError);
+    }
+
+    const normalizedScores = scoreRows
+      ? scoreRows.map(({ score: value }) => normalizeScore(value)).filter((value) => value > 0)
+      : [];
+    const totalPlayers = normalizedScores.length;
+    const beatenPlayers = normalizedScores.filter((value) => value < score).length;
+    const tiedPlayers = normalizedScores.filter((value) => value === score).length;
     const rankingPercent = totalPlayers > 0
       ? Math.round(((beatenPlayers + tiedPlayers / 2) / totalPlayers) * 100)
       : 0;

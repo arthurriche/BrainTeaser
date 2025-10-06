@@ -88,6 +88,9 @@ export const RiddleIntro = () => {
     return DIFFICULTY_LABELS[riddle.difficulty]?.[language] ?? (language === "fr" ? "À découvrir" : "To be discovered");
   }, [riddle?.difficulty, language]);
 
+  const durationSeconds = riddle?.duration ?? 45 * 60;
+  const approxMinutes = Math.max(1, Math.round(durationSeconds / 60));
+
   const releaseDateLabel = useMemo(() => {
     if (!riddle?.releaseDate) return null;
     const date = new Date(riddle.releaseDate);
@@ -140,14 +143,14 @@ export const RiddleIntro = () => {
               <h1 className="text-4xl font-semibold text-white">
                 {riddle?.title ?? (language === "fr" ? "Énigme mystère" : "Mystery riddle")}
               </h1>
-              <p className="text-lg text-white/70">{t("intro.heroHighlight")}</p>
+              <p className="text-lg text-white/70">{t("intro.heroHighlight", { minutes: approxMinutes })}</p>
               <p className="text-sm text-white/60">{t("intro.heroDescription")}</p>
             </header>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
               <dl className="grid gap-3">
                 <div className="flex items-center justify-between">
                   <dt>{t("intro.info.durationLabel")}</dt>
-                  <dd className="font-semibold text-white/85">{formatDuration(riddle?.duration ?? 45 * 60, language)}</dd>
+                  <dd className="font-semibold text-white/85">{formatDuration(durationSeconds, language)}</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt>{t("intro.info.progressionLabel")}</dt>
@@ -185,8 +188,8 @@ export const RiddleIntro = () => {
               <ul className="space-y-2 text-sm text-white/70">
                 <li className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-3">
                   {language === "fr"
-                    ? "Installe-toi dans un endroit calme. Tu auras 45 minutes environ."
-                    : "Find a quiet spot. Expect about 45 minutes."}
+                    ? `Installe-toi dans un endroit calme. Tu auras environ ${approxMinutes} minutes.`
+                    : `Find a quiet spot. Expect about ${approxMinutes} minutes.`}
                 </li>
                 <li className="rounded-2xl border border-amber-200/20 bg-white/5 px-4 py-3">
                   {language === "fr"

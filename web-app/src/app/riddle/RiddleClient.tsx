@@ -422,6 +422,7 @@ export function RiddleClient() {
 
   const renderScoreboard = () => {
     const hasScore = Boolean(scoreResult);
+    const normalizedScore = Math.round(scoreResult?.score ?? 0);
     return (
       <div className="relative min-h-screen pb-24 text-white">
         <TopBar />
@@ -504,7 +505,7 @@ export function RiddleClient() {
               <div className="elevated-card animate-section animate-delay-3 w-full space-y-8 p-10 text-left text-white/80">
                 <div className="space-y-3">
                   <p className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">{t("scoreboard.scoreLabel")}</p>
-                  <p className="text-5xl font-semibold text-white">{scoreResult?.score ?? 0}</p>
+                  <p className="text-5xl font-semibold text-white">{normalizedScore} / 100</p>
                   <p className="whitespace-pre-line text-base text-white/80">
                     {scoreResult?.feedback ?? t("scoreboard.fallbackFeedback")}
                   </p>

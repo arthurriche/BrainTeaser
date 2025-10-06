@@ -13,6 +13,15 @@ const DIFFICULTY_LABELS: Record<number, { en: string; fr: string }> = {
 
 type GenericSupabaseClient = SupabaseClient;
 
+const MAX_RAW_SCORE = 1100;
+
+const normalizeScore = (value: number | null | undefined) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  if (value <= 0) return 0;
+  if (value <= 100) return Math.round(value);
+  return Math.max(0, Math.min(100, Math.round((value / MAX_RAW_SCORE) * 100)));
+};
+
 const createClient = async (): Promise<GenericSupabaseClient> => {
   const cookieStore = cookies();
   return createRouteHandlerClient({ cookies: () => cookieStore });
@@ -72,10 +81,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ hasScore: false });
     }
 
+    const normalizedScore = normalizeScore(existingScore.score ?? 0);
+
     console.log("[Scoreboard] Score row fetched", {
       riddleId,
       userId: session.user.id,
-      score: existingScore.score,
+      score: normalizedScore,
       duration: existingScore.duration,
       msgCount: existingScore.msg_count,
     });
@@ -116,7 +127,7 @@ export async function GET(request: Request) {
     const { url: resultImageURL, pending: imagePending } = await ensureResultImage(
       riddleId,
       riddle?.question ?? "",
-      existingScore.score ?? 0,
+      normalizedScore,
       difficultyLabel,
       { eager: false },
     );
@@ -127,28 +138,22 @@ export async function GET(request: Request) {
       imagePending,
     });
 
-    const [totalResponse, lowerResponse, equalResponse] = await Promise.all([
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .gt("score", 0),
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .gt("score", 0)
-        .lt("score", existingScore.score ?? 0),
-      supabase
-        .from("scores")
-        .select("score", { count: "exact", head: true })
-        .eq("riddle_id", riddleId)
-        .eq("score", existingScore.score ?? 0),
-    ]);
+    const { data: scoreRows, error: scoreListError } = await supabase
+      .from("scores")
+      .select("score")
+      .eq("riddle_id", riddleId)
+      .gt("score", 0);
 
-    const totalPlayers = totalResponse.count ?? 0;
-    const beatenPlayers = lowerResponse.count ?? 0;
-    const tiedPlayers = equalResponse.count ?? 0;
+    if (scoreListError) {
+      console.error("[Scoreboard] Failed to list scores", scoreListError);
+    }
+
+    const normalizedScores = scoreRows
+      ? scoreRows.map(({ score }) => normalizeScore(score)).filter((value) => value > 0)
+      : [];
+    const totalPlayers = normalizedScores.length;
+    const beatenPlayers = normalizedScores.filter((value) => value < normalizedScore).length;
+    const tiedPlayers = normalizedScores.filter((value) => value === normalizedScore).length;
     const rankingPercent = totalPlayers > 0
       ? Math.round(((beatenPlayers + tiedPlayers / 2) / totalPlayers) * 100)
       : 0;
@@ -156,7 +161,7 @@ export async function GET(request: Request) {
     console.log("[Scoreboard] Returning payload", {
       riddleId,
       userId: session.user.id,
-      score: existingScore.score,
+      score: normalizedScore,
       totalPlayers,
       beatenPlayers,
       rankingPercent,
@@ -166,7 +171,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       hasScore: true,
-      score: existingScore.score ?? 0,
+      score: normalizedScore,
       duration: existingScore.duration ?? null,
       msgCount: existingScore.msg_count ?? null,
       hintsUsed: null,
