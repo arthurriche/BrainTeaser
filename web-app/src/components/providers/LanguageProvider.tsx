@@ -7,6 +7,16 @@ type Language = "en" | "fr";
 type TranslationEntry = string | ((params?: Record<string, unknown>) => string);
 type TranslationTree = { [key: string]: TranslationEntry | TranslationTree };
 
+const getNumberParam = (params: Record<string, unknown> | undefined, key: string, fallback = 0) => {
+  const value = params?.[key];
+  return typeof value === "number" ? value : fallback;
+};
+
+const getStringParam = (params: Record<string, unknown> | undefined, key: string, fallback = "") => {
+  const value = params?.[key];
+  return typeof value === "string" ? value : fallback;
+};
+
 type LanguageContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;
@@ -54,18 +64,21 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     },
     scoreboard: {
       badge: "Ranking",
-      heading: ({ id }: { id: number }) => `Puzzle #${id} results`,
+      heading: (params) => `Puzzle #${getNumberParam(params, "id") || "?"} results`,
       scoreLabel: "Score",
       fallbackFeedback: "Your run is recorded. Come back tomorrow for a fresh riddle.",
       outrankLabel: "You outrank",
       percentSuffix: "% of challengers",
-      players: ({ beaten, total }: { beaten: number; total: number }) =>
-        total > 0 ? `${beaten} of ${total} players` : "No comparison yet",
+      players: (params) => {
+        const beaten = getNumberParam(params, "beaten");
+        const total = getNumberParam(params, "total");
+        return total > 0 ? `${beaten} of ${total} players` : "No comparison yet";
+      },
       timeUsed: "Time used",
       hintsUsed: "Hints spent",
       hintListTitle: "Hints to revisit",
       missingTitle: "Sharpen these points",
-      confidence: ({ value }: { value: number }) => `Master's confidence: ${value}%`,
+      confidence: (params) => `Master's confidence: ${getNumberParam(params, "value")}%`,
       loading: "Computing the ranking…",
       support: "Support via Apple Pay (€0.30)",
       backHome: "Back to home",
@@ -80,10 +93,10 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     riddle: {
       stageLabel: "Resolution stage",
       heroTitle: "Focus on the solution",
-      puzzleNumber: ({ id }: { id: number }) => `Puzzle #${id}`,
-      difficulty: ({ label }: { label: string }) => label,
-      releaseDate: ({ date }: { date: string }) => `Published ${date}`,
-      targetTime: ({ minutes }: { minutes: number }) => `Target time: ${minutes} min`,
+      puzzleNumber: (params) => `Puzzle #${getNumberParam(params, "id") || "?"}`,
+      difficulty: (params) => getStringParam(params, "label"),
+      releaseDate: (params) => `Published ${getStringParam(params, "date")}`,
+      targetTime: (params) => `Target time: ${getNumberParam(params, "minutes")} min`,
       promptLabel: "Prompt",
       answerLabel: "Your answer",
       answerPlaceholder: "Describe your reasoning and final answer.",
@@ -92,7 +105,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         hintsUsed: "Hints used",
       },
       hintSectionTitle: "Hints",
-      hintReveal: ({ next }: { next: number }) => `Reveal hint ${next}`,
+      hintReveal: (params) => `Reveal hint ${getNumberParam(params, "next")}`,
       hintReminder: "Use hints sparingly—each one lowers your final score.",
       submit: "Submit my answer",
       submitLoading: "Submitting…",
@@ -148,18 +161,21 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     },
     scoreboard: {
       badge: "Classement",
-      heading: ({ id }: { id: number }) => `Résultats de l'énigme n°${id}`,
+      heading: (params) => `Résultats de l'énigme n°${getNumberParam(params, "id") || "?"}`,
       scoreLabel: "Score",
       fallbackFeedback: "Ta tentative est enregistrée. Reviens demain pour une nouvelle énigme.",
       outrankLabel: "Tu surpasses",
       percentSuffix: "% des challengers",
-      players: ({ beaten, total }: { beaten: number; total: number }) =>
-        total > 0 ? `${beaten} joueurs sur ${total}` : "Pas encore de comparaison disponible",
+      players: (params) => {
+        const beaten = getNumberParam(params, "beaten");
+        const total = getNumberParam(params, "total");
+        return total > 0 ? `${beaten} joueurs sur ${total}` : "Pas encore de comparaison disponible";
+      },
       timeUsed: "Temps écoulé",
       hintsUsed: "Indices utilisés",
       hintListTitle: "Indices à retenir",
       missingTitle: "Points à affiner",
-      confidence: ({ value }: { value: number }) => `Confiance du Maître : ${value}%`,
+      confidence: (params) => `Confiance du Maître : ${getNumberParam(params, "value")}%`,
       loading: "Calcul du classement…",
       support: "Soutenir via Apple Pay (0,30 €)",
       backHome: "Retour à l'accueil",
@@ -174,10 +190,10 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     riddle: {
       stageLabel: "Étape de résolution",
       heroTitle: "Concentre-toi sur la solution",
-      puzzleNumber: ({ id }: { id: number }) => `Énigme n°${id}`,
-      difficulty: ({ label }: { label: string }) => label,
-      releaseDate: ({ date }: { date: string }) => `Publié le ${date}`,
-      targetTime: ({ minutes }: { minutes: number }) => `Durée cible : ${minutes} min`,
+      puzzleNumber: (params) => `Énigme n°${getNumberParam(params, "id") || "?"}`,
+      difficulty: (params) => getStringParam(params, "label"),
+      releaseDate: (params) => `Publié le ${getStringParam(params, "date")}`,
+      targetTime: (params) => `Durée cible : ${getNumberParam(params, "minutes")} min`,
       promptLabel: "Énoncé",
       answerLabel: "Ta réponse",
       answerPlaceholder: "Décris ton raisonnement complet et ta proposition finale.",
@@ -186,7 +202,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         hintsUsed: "Indices utilisés",
       },
       hintSectionTitle: "Indices",
-      hintReveal: ({ next }: { next: number }) => `Révéler l'indice ${next}`,
+      hintReveal: (params) => `Révéler l'indice ${getNumberParam(params, "next")}`,
       hintReminder: "Utilise les indices avec parcimonie : chacun réduit ton score final.",
       submit: "Valider ma réponse",
       submitLoading: "Validation…",
