@@ -194,36 +194,141 @@ export const AuthView = () => {
     const redirectTo = `${window.location.origin}/auth/callback`;
 
     const startOAuth = async (provider: "linkedin" | "linkedin_oidc") => {
-      return supabase.auth.signInWithOAuth({
+      console.log("[Auth] Starting LinkedIn OAuth", { provider, redirectTo });
+      const result = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
           scopes: "openid profile email",
         },
       });
+      if (result.error) {
+        console.error("[Auth] LinkedIn OAuth failed", {
+          provider,
+          error: result.error.message,
+        });
+      } else {
+        console.log("[Auth] LinkedIn OAuth initiated", { provider });
+      }
+      return result;
     };
 
+    const preferred = (process.env.NEXT_PUBLIC_LINKEDIN_PROVIDER ?? "linkedin") as
+      | "linkedin"
+      | "linkedin_oidc";
+    let candidates: Array<"linkedin" | "linkedin_oidc"> =
+      preferred === "linkedin_oidc"
+        ? ["linkedin_oidc", "linkedin"]
+        : ["linkedin", "linkedin_oidc"];
+
     try {
-      const { error } = await startOAuth("linkedin");
-      if (error) {
-        if (error.message?.toLowerCase().includes("provider not enabled")) {
-          const fallback = await startOAuth("linkedin_oidc");
-          if (fallback.error) throw fallback.error;
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseAnonKey) {
+        const settingsResponse = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+          headers: {
+            apikey: supabaseAnonKey,
+          },
+          cache: "no-store",
+        });
+        if (settingsResponse.ok) {
+          const settings: unknown = await settingsResponse.json();
+          const external =
+            settings && typeof settings === "object" && "external" in settings
+              ? (settings as { external?: Record<string, { enabled?: boolean }> }).external
+              : null;
+          const enabledProviders: Array<"linkedin" | "linkedin_oidc"> = [];
+          if (external?.linkedin?.enabled) {
+            enabledProviders.push("linkedin");
+          }
+          if (external?.linkedin_oidc?.enabled) {
+            enabledProviders.push("linkedin_oidc");
+          }
+          if (enabledProviders.length > 0) {
+            const ordered = new Set<"linkedin" | "linkedin_oidc">([
+              ...enabledProviders.filter((provider) => provider === preferred),
+              ...enabledProviders.filter((provider) => provider !== preferred),
+            ]);
+            candidates = Array.from(ordered);
+          }
+          console.log("[Auth] Supabase auth settings", {
+            enabledLinkedin: external?.linkedin?.enabled ?? false,
+            enabledLinkedinOidc: external?.linkedin_oidc?.enabled ?? false,
+            candidates,
+          });
         } else {
-          throw error;
+          console.warn("[Auth] Unable to fetch Supabase auth settings", {
+            status: settingsResponse.status,
+            statusText: settingsResponse.statusText,
+          });
         }
+      } else {
+        console.warn("[Auth] Missing Supabase env variables; skipping settings detection");
       }
     } catch (error) {
-      setLoading(false);
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : copy.linkedinError,
-      );
-      return;
+      console.error("[Auth] Failed to inspect Supabase auth settings", error);
+    }
+
+    const errors: string[] = [];
+
+    for (const provider of candidates) {
+      console.log("[Auth] Attempting LinkedIn provider", { provider });
+      try {
+        const { error } = await startOAuth(provider);
+        if (!error) {
+          setLoading(false);
+          console.log("[Auth] LinkedIn provider accepted", { provider });
+          return;
+        }
+        const normalized = error.message?.toLowerCase() ?? "";
+        if (normalized.includes("provider is not enabled") || normalized.includes("provider not enabled")) {
+          console.warn("[Auth] LinkedIn provider not enabled", { provider });
+          errors.push(`${provider}: provider not enabled`);
+          continue;
+        }
+        throw error;
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error("[Auth] LinkedIn provider error", { provider, message: error.message });
+          const normalized = error.message.toLowerCase();
+          if (normalized.includes("provider is not enabled") || normalized.includes("provider not enabled")) {
+            errors.push(`${provider}: provider not enabled`);
+            continue;
+          }
+          if (normalized.includes("redirect_uri")) {
+            setLoading(false);
+            setErrorMessage(
+              language === "fr"
+                ? "La redirection LinkedIn ne correspond pas. Vérifie les URLs autorisées dans la console LinkedIn (supabase.co/auth/v1/callback)."
+                : "LinkedIn redirect mismatch. Check the authorized URLs in the LinkedIn console (supabase.co/auth/v1/callback).",
+            );
+            console.error("[Auth] LinkedIn redirect mismatch", error);
+            return;
+          }
+          setLoading(false);
+          setErrorMessage(error.message);
+          return;
+        }
+        console.error("[Auth] LinkedIn provider threw non-error", { provider, value: error });
+        setLoading(false);
+        setErrorMessage(copy.linkedinError);
+        return;
+      }
     }
 
     setLoading(false);
+    const message =
+      errors.length > 0
+        ? errors.join(" | ")
+        : language === "fr"
+          ? "Impossible de contacter LinkedIn."
+          : "We couldn't reach LinkedIn.";
+    console.warn("[Auth] LinkedIn providers exhausted", { errors });
+    setErrorMessage(
+      language === "fr"
+        ? `${message} Activez le provider approprié dans Supabase.`
+        : `${message} Enable the appropriate provider in Supabase.`,
+    );
   };
 
   const handleResetPassword = async () => {
