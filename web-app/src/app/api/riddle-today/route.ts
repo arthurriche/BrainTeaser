@@ -19,24 +19,28 @@ type DetailPayload = {
   image_path?: string | null;
 };
 
-const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKeyEnv = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrlEnv || !supabaseAnonKeyEnv) {
-  throw new Error(
-    "Supabase environment variables are not set. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
-  );
-}
-
-const supabaseUrl: string = supabaseUrlEnv;
-const supabaseAnonKey: string = supabaseAnonKeyEnv;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
 
 export async function GET() {
+  const resolvedUrl = supabaseUrl;
+  const resolvedAnonKey = supabaseAnonKey;
+
+  if (!resolvedUrl || !resolvedAnonKey) {
+    console.error("[RiddleToday] Missing Supabase env variables");
+    return NextResponse.json(
+      {
+        error: "Supabase configuration missing on this environment.",
+      },
+      { status: 500 },
+    );
+  }
+
   console.log("[RiddleToday] Fetching daily riddle");
-  const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/riddle_today`, {
+  const edgeResponse = await fetch(`${resolvedUrl}/functions/v1/riddle_today`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${supabaseAnonKey}`,
+      Authorization: `Bearer ${resolvedAnonKey}`,
       "Content-Type": "application/json",
     },
     cache: "no-store",
@@ -67,11 +71,11 @@ export async function GET() {
   });
 
   const detailResponse = await fetch(
-    `${supabaseUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty,release_date,hint1,hint2,hint3,image_path`,
+    `${resolvedUrl}/rest/v1/riddles?id=eq.${edgeData.id}&select=title,duration,difficulty,release_date,hint1,hint2,hint3,image_path`,
     {
       headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
+        apikey: resolvedAnonKey,
+        Authorization: `Bearer ${resolvedAnonKey}`,
       },
       cache: "no-store",
     }
