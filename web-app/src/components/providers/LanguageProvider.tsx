@@ -224,12 +224,16 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
 };
 
 const getNestedValue = (tree: TranslationTree, segments: string[]): TranslationEntry | undefined => {
-  return segments.reduce<TranslationEntry | TranslationTree | undefined>((acc, segment) => {
-    if (acc && typeof acc === "object" && segment in acc) {
-      return acc[segment];
+  let current: TranslationEntry | TranslationTree | undefined = tree;
+  for (const segment of segments) {
+    if (current && typeof current === "object" && segment in current) {
+      current = current[segment];
+    } else {
+      current = undefined;
+      break;
     }
-    return undefined;
-  }, tree);
+  }
+  return typeof current === "function" || typeof current === "string" ? current : undefined;
 };
 
 const formatString = (template: string, params?: Record<string, unknown>) => {
