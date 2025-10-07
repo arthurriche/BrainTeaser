@@ -56,7 +56,7 @@ export const RiddleIntro = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/riddle-today", { cache: "no-store" });
+        const response = await fetch(`/api/riddle-today?lang=${language}`, { cache: "no-store" });
 
         if (!response.ok) {
           const body = await response.text();
@@ -81,7 +81,7 @@ export const RiddleIntro = () => {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [language]);
 
   const difficulty = useMemo(() => {
     if (!riddle?.difficulty) return language === "fr" ? "À découvrir" : "To be discovered";
@@ -99,9 +99,9 @@ export const RiddleIntro = () => {
   }, [riddle?.releaseDate, language]);
 
   const renderLoading = () => (
-    <div className="relative min-h-screen text-white">
+    <div className="flex min-h-screen flex-col text-white">
       <TopBar />
-      <div className="mx-auto mt-32 flex max-w-4xl flex-col items-center gap-4 px-6 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         <Loader2 className="h-12 w-12 animate-spin text-white/70" />
         <p className="text-sm text-white/60">{t("intro.loading")}</p>
       </div>
@@ -109,9 +109,9 @@ export const RiddleIntro = () => {
   );
 
   const renderError = () => (
-    <div className="relative min-h-screen text-white">
+    <div className="flex min-h-screen flex-col text-white">
       <TopBar />
-      <div className="mx-auto mt-32 flex max-w-4xl flex-col items-center gap-6 px-6 text-center">
+      <div className="mx-auto flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
         <h2 className="text-3xl font-semibold text-white">{t("intro.emptyTitle")}</h2>
         <p className="text-sm text-white/70">{error ?? t("intro.emptyDescription")}</p>
         <button

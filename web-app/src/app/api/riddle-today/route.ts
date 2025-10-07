@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { ensureRiddleImage } from "@/lib/riddleImage";
+import { translateRiddleContent } from "@/lib/translation";
+import type { SupportedLanguage } from "@/lib/judge";
 
 type EdgePayload = {
   id: number;
@@ -22,7 +24,10 @@ type DetailPayload = {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const languageParam = searchParams.get("lang");
+  const language: SupportedLanguage = languageParam === "en" ? "en" : "fr";
   const resolvedUrl = supabaseUrl;
   const resolvedAnonKey = supabaseAnonKey;
 
@@ -109,15 +114,36 @@ export async function GET() {
     hasUrl: Boolean(imageURL),
   });
 
+  let title = detail.title ?? null;
+  let question = edgeData.question ?? null;
+  let hint1 = detail.hint1 ?? null;
+  let hint2 = detail.hint2 ?? null;
+  let hint3 = detail.hint3 ?? null;
+
+  const translated = await translateRiddleContent(
+    {
+      title,
+      question,
+      hints: { hint1, hint2, hint3 },
+    },
+    language,
+  );
+  title = translated.title ?? title;
+  question = translated.question ?? question;
+  hint1 = translated.hints?.hint1 ?? hint1;
+  hint2 = translated.hints?.hint2 ?? hint2;
+  hint3 = translated.hints?.hint3 ?? hint3;
+
   return NextResponse.json({
     ...edgeData,
+    question,
     imageURL,
-    title: detail.title ?? null,
+    title,
     duration: detail.duration ?? null,
     difficulty: detail.difficulty ?? null,
     releaseDate: detail.release_date ?? null,
-    hint1: detail.hint1 ?? null,
-    hint2: detail.hint2 ?? null,
-    hint3: detail.hint3 ?? null,
+    hint1,
+    hint2,
+    hint3,
   });
 }

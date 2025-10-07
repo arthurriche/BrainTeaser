@@ -2,14 +2,7 @@ import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { ensureResultImage } from "@/lib/resultImage";
-
-const DIFFICULTY_LABELS: Record<number, { en: string; fr: string }> = {
-  1: { en: "Novice", fr: "Novice" },
-  2: { en: "Skilled", fr: "Confirmé" },
-  3: { en: "Expert", fr: "Expert" },
-  4: { en: "Grandmaster", fr: "Grand Maître" },
-};
+import { translateRiddleContent } from "@/lib/translation";
 
 type GenericSupabaseClient = SupabaseClient;
 
@@ -23,7 +16,7 @@ const normalizeScore = (value: number | null | undefined) => {
 };
 
 const createClient = async (): Promise<GenericSupabaseClient> => {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   return createRouteHandlerClient({ cookies: () => cookieStore });
 };
 
@@ -108,35 +101,36 @@ export async function GET(request: Request) {
       difficulty: riddle?.difficulty,
     });
 
-    const hints = [riddle?.hint1, riddle?.hint2, riddle?.hint3].filter(
+    let displayTitle = riddle?.title ?? null;
+    let displayQuestion = riddle?.question ?? null;
+    let displaySolution = riddle?.solution ?? null;
+    let displayHintsMap = {
+      hint1: riddle?.hint1 ?? null,
+      hint2: riddle?.hint2 ?? null,
+      hint3: riddle?.hint3 ?? null,
+    };
+
+    const translated = await translateRiddleContent(
+      {
+        title: displayTitle,
+        question: displayQuestion,
+        solution: displaySolution,
+        hints: displayHintsMap,
+      },
+      language,
+    );
+    displayTitle = translated.title ?? displayTitle;
+    displayQuestion = translated.question ?? displayQuestion;
+    displaySolution = translated.solution ?? displaySolution;
+    displayHintsMap = {
+      hint1: translated.hints?.hint1 ?? displayHintsMap.hint1,
+      hint2: translated.hints?.hint2 ?? displayHintsMap.hint2,
+      hint3: translated.hints?.hint3 ?? displayHintsMap.hint3,
+    };
+
+    const hints = [displayHintsMap.hint1, displayHintsMap.hint2, displayHintsMap.hint3].filter(
       (hint): hint is string => Boolean(hint),
     );
-
-    const difficultyEntry = typeof riddle?.difficulty === "number" ? DIFFICULTY_LABELS[riddle.difficulty] : null;
-    const difficultyLabel = typeof riddle?.difficulty === "number"
-      ? difficultyEntry
-        ? language === "fr"
-          ? difficultyEntry.fr
-          : difficultyEntry.en
-        : language === "fr"
-          ? `Niveau ${riddle.difficulty}`
-          : `Level ${riddle.difficulty}`
-      : typeof riddle?.difficulty === "string"
-        ? riddle.difficulty
-        : null;
-    const { url: resultImageURL, pending: imagePending } = await ensureResultImage(
-      riddleId,
-      riddle?.question ?? "",
-      normalizedScore,
-      difficultyLabel,
-      { eager: false },
-    );
-    console.log("[Scoreboard] Image status", {
-      riddleId,
-      userId: session.user.id,
-      hasUrl: Boolean(resultImageURL),
-      imagePending,
-    });
 
     const { data: scoreRows, error: scoreListError } = await supabase
       .from("scores")
@@ -165,8 +159,6 @@ export async function GET(request: Request) {
       totalPlayers,
       beatenPlayers,
       rankingPercent,
-      imagePending,
-      hasImage: Boolean(resultImageURL),
     });
 
     return NextResponse.json({
@@ -179,11 +171,9 @@ export async function GET(request: Request) {
       beatenPlayers,
       rankingPercent,
       hints,
-      resultImageURL,
-      imagePending,
-      question: riddle?.question ?? null,
-      officialAnswer: riddle?.solution ?? null,
-      riddleTitle: riddle?.title ?? null,
+      question: displayQuestion,
+      officialAnswer: displaySolution,
+      riddleTitle: displayTitle,
     });
   } catch (error) {
     console.error("[Scoreboard] Failed to fetch data", { riddleId, lang: language }, error);

@@ -3,17 +3,10 @@ import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { ensureResultImage } from "@/lib/resultImage";
 import { ensureDailyJudgeCalibration, evaluateAnswerWithJudge, getJudgeOpenAIClient } from "@/lib/judge";
+import { translateRiddleContent } from "@/lib/translation";
 
 const DEFAULT_DURATION = 45 * 60;
-
-const DIFFICULTY_LABELS: Record<number, { en: string; fr: string }> = {
-  1: { en: "Novice", fr: "Novice" },
-  2: { en: "Skilled", fr: "Confirmé" },
-  3: { en: "Expert", fr: "Expert" },
-  4: { en: "Grandmaster", fr: "Grand Maître" },
-};
 
 const NORMALIZE_REGEX = /[\s\p{P}\p{S}]+/gu;
 const MAX_RAW_SCORE = 1100;
@@ -149,7 +142,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: messages.invalidParams }, { status: 400 });
     }
 
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase: GenericSupabaseClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const {
       data: { session },
@@ -186,6 +179,37 @@ export async function POST(request: Request) {
       ? body.hints.filter((hint: unknown): hint is string => typeof hint === 'string')
       : [riddle.hint1, riddle.hint2, riddle.hint3].filter((hint): hint is string => Boolean(hint));
 
+    let displayTitle = riddle.title ?? null;
+    let displayQuestion = riddle.question ?? null;
+    let displaySolution = riddle.solution ?? null;
+    let displayHintsMap = {
+      hint1: riddle.hint1 ?? null,
+      hint2: riddle.hint2 ?? null,
+      hint3: riddle.hint3 ?? null,
+    };
+
+    const translated = await translateRiddleContent(
+      {
+        title: displayTitle,
+        question: displayQuestion,
+        solution: displaySolution,
+        hints: displayHintsMap,
+      },
+      language,
+    );
+    displayTitle = translated.title ?? displayTitle;
+    displayQuestion = translated.question ?? displayQuestion;
+    displaySolution = translated.solution ?? displaySolution;
+    displayHintsMap = {
+      hint1: translated.hints?.hint1 ?? displayHintsMap.hint1,
+      hint2: translated.hints?.hint2 ?? displayHintsMap.hint2,
+      hint3: translated.hints?.hint3 ?? displayHintsMap.hint3,
+    };
+
+    const displayHints = [displayHintsMap.hint1, displayHintsMap.hint2, displayHintsMap.hint3].filter(
+      (hint): hint is string => Boolean(hint),
+    );
+
     const normalizedUserAnswer = normalizeAnswer(answer);
     const normalizedExpected = normalizeAnswer(riddle.solution ?? "");
     let correct = normalizedUserAnswer.length > 0 && normalizedUserAnswer === normalizedExpected;
@@ -220,9 +244,9 @@ export async function POST(request: Request) {
         riddle.solution ?? "",
         answer,
         calibration,
-        hints,
-        language,
-      );
+      hints,
+      language,
+    );
       console.log("[Submit] Judge responded", {
         riddleId,
         isCorrect: judgeEvaluation?.isCorrect,
@@ -232,8 +256,10 @@ export async function POST(request: Request) {
       correct = judgeEvaluation?.isCorrect ?? false;
     }
 
-    const baseScore = correct ? 700 : 300;
-    const rawScore = Math.max(0, baseScore + timeBonus - hintPenalty - chatPenalty);
+    const judgedConfidence = judgeEvaluation?.confidence ?? 0;
+    const accuracyScore = correct ? 700 : Math.round(Math.max(judgedConfidence, 0) * 400);
+    const speedScore = correct ? timeBonus : 0;
+    const rawScore = Math.max(0, accuracyScore + speedScore - hintPenalty - chatPenalty);
     const score = normalizeScore(rawScore);
 
     const { error: upsertError } = await supabase
@@ -285,31 +311,6 @@ export async function POST(request: Request) {
       rankingPercent,
     });
 
-    const difficultyEntry = typeof riddle.difficulty === "number" ? DIFFICULTY_LABELS[riddle.difficulty] : null;
-    const difficultyLabel = typeof riddle.difficulty === "number"
-      ? difficultyEntry
-        ? language === "fr"
-          ? difficultyEntry.fr
-          : difficultyEntry.en
-        : language === "fr"
-          ? `Niveau ${riddle.difficulty}`
-          : `Level ${riddle.difficulty}`
-      : typeof riddle.difficulty === "string"
-        ? riddle.difficulty
-        : null;
-    const { url: resultImageURL, pending: imagePending } = await ensureResultImage(
-      riddleId,
-      riddle.question ?? "",
-      score,
-      difficultyLabel,
-    );
-    console.log("[Submit] Result image status", {
-      riddleId,
-      userId: session.user.id,
-      hasUrl: Boolean(resultImageURL),
-      imagePending,
-    });
-
     const openaiClient = getJudgeOpenAIClient();
     const baseReasoning = judgeEvaluation?.reasoning?.trim();
     const missingElements = judgeEvaluation?.missingElements ?? [];
@@ -336,13 +337,12 @@ export async function POST(request: Request) {
       rankingPercent,
       beatenPlayers,
       totalPlayers,
-      resultImageURL,
-      imagePending,
       judgeConfidence: judgeEvaluation?.confidence ?? null,
       judgeMissingElements: missingElements,
-      officialAnswer: riddle.solution ?? null,
-      question: riddle.question ?? null,
-      riddleTitle: riddle.title ?? null,
+      officialAnswer: displaySolution,
+      question: displayQuestion,
+      riddleTitle: displayTitle,
+      hints: displayHints,
     };
     console.log("[Submit] Returning response", {
       riddleId,

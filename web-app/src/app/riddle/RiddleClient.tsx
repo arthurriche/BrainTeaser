@@ -37,13 +37,11 @@ interface ScoreResult {
   beatenPlayers: number;
   totalPlayers: number;
   hints?: string[];
-  resultImageURL?: string | null;
   judgeConfidence?: number | null;
   judgeMissingElements?: string[];
   question?: string | null;
   officialAnswer?: string | null;
   riddleTitle?: string | null;
-  imagePending?: boolean;
 }
 
 const DIFFICULTY_MAP: Record<number, { en: string; fr: string }> = {
@@ -87,13 +85,11 @@ const mergeScoreData = (
   beatenPlayers: overrides.beatenPlayers,
   totalPlayers: overrides.totalPlayers,
   hints: overrides.hints ?? base?.hints ?? [],
-  resultImageURL: overrides.resultImageURL ?? base?.resultImageURL ?? null,
   judgeConfidence: overrides.judgeConfidence ?? base?.judgeConfidence ?? null,
   judgeMissingElements: overrides.judgeMissingElements ?? base?.judgeMissingElements ?? [],
   question: overrides.question ?? base?.question ?? null,
   officialAnswer: overrides.officialAnswer ?? base?.officialAnswer ?? null,
   riddleTitle: overrides.riddleTitle ?? base?.riddleTitle ?? null,
-  imagePending: overrides.imagePending ?? base?.imagePending ?? false,
 });
 
 const useViewportSize = () => {
@@ -127,8 +123,6 @@ export function RiddleClient() {
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
-  const [scoreboardRetryCount, setScoreboardRetryCount] = useState(0);
-
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
   const viewport = useViewportSize();
@@ -142,7 +136,7 @@ export function RiddleClient() {
     reset();
     try {
       logRiddleClient("Loading daily riddle");
-      const response = await fetch("/api/riddle-today", { cache: "no-store" });
+      const response = await fetch(`/api/riddle-today?lang=${language}`, { cache: "no-store" });
       if (!response.ok) {
         const body = await response.text();
         logRiddleClient("Failed to load riddle", { status: response.status, body });
@@ -170,7 +164,7 @@ export function RiddleClient() {
     } finally {
       setLoading(false);
     }
-  }, [start, reset]);
+  }, [start, reset, language]);
 
   useEffect(() => {
     void loadRiddle();
@@ -210,7 +204,7 @@ export function RiddleClient() {
     setSubmittingAnswer(true);
     setShowScoreboard(false);
     setScoreboardError(null);
-    setScoreboardRetryCount(0);
+    pause();
 
     try {
       logRiddleClient("Submitting answer", {
@@ -252,19 +246,16 @@ export function RiddleClient() {
         setSubmittingAnswer(false);
         return;
       }
-      const result = data as ScoreResult & { imagePending?: boolean };
+      const result = data as ScoreResult;
       const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
       const enhancedResult: ScoreResult = {
         ...result,
         hints: result.hints && result.hints.length > 0 ? result.hints : usedHints,
         riddleTitle: result.riddleTitle ?? riddle.title ?? null,
-        imagePending: result.imagePending ?? result.resultImageURL == null,
       };
       logRiddleClient("Submit succeeded", {
         riddleId: riddle.id,
         score: enhancedResult.score,
-        imagePending: enhancedResult.imagePending,
-        hasImage: Boolean(enhancedResult.resultImageURL),
         rankingPercent: enhancedResult.rankingPercent,
       });
       setScoreResult(enhancedResult);
@@ -317,23 +308,16 @@ export function RiddleClient() {
           userMessages: data.msgCount ?? scoreResult?.userMessages ?? 1,
           timeRemaining: scoreResult?.timeRemaining ?? estimatedRemaining,
           hints: data.hints ?? scoreResult?.hints ?? hints,
-          resultImageURL: data.resultImageURL ?? scoreResult?.resultImageURL ?? null,
           officialAnswer: data.officialAnswer ?? scoreResult?.officialAnswer ?? null,
           question: data.question ?? scoreResult?.question ?? null,
           riddleTitle: data.riddleTitle ?? scoreResult?.riddleTitle ?? null,
-          imagePending: data.imagePending ?? scoreResult?.imagePending ?? false,
         });
         logRiddleClient("Scoreboard fetched", {
           riddleId: riddle.id,
           score: merged.score,
           rankingPercent: merged.rankingPercent,
-          imagePending: merged.imagePending,
-          hasImage: Boolean(merged.resultImageURL),
         });
         setScoreResult(merged);
-        if (merged.resultImageURL) {
-          setScoreboardRetryCount(0);
-        }
         setShowScoreboard(true);
       } else {
         logRiddleClient("Scoreboard has no score", { riddleId: riddle.id });
@@ -355,42 +339,12 @@ export function RiddleClient() {
     }
   }, [countdownState.timeRemaining, fetchScoreboard, showScoreboard, pause]);
 
-  useEffect(() => {
-    if (!showScoreboard || !scoreResult || scoreResult.resultImageURL || scoreboardError || !scoreResult.imagePending) {
-      return undefined;
-    }
-
-    if (scoreboardRetryCount >= 3) {
-      logRiddleClient("Result image retry limit reached", { riddleId: riddle?.id });
-      setScoreboardError(
-        language === "fr"
-          ? "Illustration indisponible pour le moment."
-          : "Illustration unavailable right now.",
-      );
-      return undefined;
-    }
-
-    const timer = setTimeout(() => {
-      setScoreboardRetryCount((count) => count + 1);
-      logRiddleClient("Retrying scoreboard for image", { riddleId: riddle?.id, retry: scoreboardRetryCount + 1 });
-      void fetchScoreboard();
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [showScoreboard, scoreResult, fetchScoreboard, scoreboardRetryCount, scoreboardError, language, riddle?.id]);
-
-  useEffect(() => {
-    if (scoreResult?.resultImageURL) {
-      logRiddleClient("Result image available", { riddleId: riddle?.id });
-      setScoreboardRetryCount(0);
-    }
-  }, [scoreResult?.resultImageURL, riddle?.id]);
-
   const scoreboardShouldDisplay = showScoreboard || Boolean(scoreResult);
 
   const renderLoading = () => (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 text-center text-white/70">
+    <div className="flex min-h-screen flex-col text-white/70">
       <TopBar />
-      <div className="relative mt-24 flex flex-col items-center gap-3">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
         <Loader2 className="h-12 w-12 animate-spin text-white/60" />
         <p>{t("loading.title")}</p>
         <p className="text-sm text-white/50">{t("loading.subtitle")}</p>
@@ -399,9 +353,9 @@ export function RiddleClient() {
   );
 
   const renderError = () => (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 text-center text-white/70">
+    <div className="flex min-h-screen flex-col text-white/70">
       <TopBar />
-      <div className="mt-24 flex flex-col items-center gap-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center">
         <div className="glass-panel flex h-24 w-24 items-center justify-center text-white">
           <TriangleAlert className="h-12 w-12" />
         </div>
@@ -477,31 +431,6 @@ export function RiddleClient() {
                 )}
               </div>
 
-              {scoreResult?.resultImageURL && (
-                <div className="elevated-card animate-section animate-delay-2 w-full overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={scoreResult.resultImageURL}
-                    alt="Riddle result illustration"
-                    className="h-72 w-full object-cover"
-                  />
-                </div>
-              )}
-
-              {!scoreResult?.resultImageURL && scoreResult?.imagePending && (
-                <div className="glass-panel animate-section animate-delay-2 flex w-full items-center justify-center gap-3 px-10 py-14 text-white/80">
-                  <Loader2 className="h-10 w-10 animate-spin text-white" />
-                  <div className="space-y-1 text-center text-sm">
-                    <p>{language === "fr" ? "Illustration en cours de génération…" : "Generating illustration…"}</p>
-                    <p className="text-xs text-white/60">
-                      {language === "fr"
-                        ? "Cela peut prendre quelques secondes."
-                        : "This may take a few seconds."}
-                    </p>
-                  </div>
-                </div>
-              )}
-
               <div className="elevated-card animate-section animate-delay-3 w-full space-y-8 p-10 text-left text-white/80">
                 <div className="space-y-3">
                   <p className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">{t("scoreboard.scoreLabel")}</p>
@@ -509,11 +438,6 @@ export function RiddleClient() {
                   <p className="whitespace-pre-line text-base text-white/80">
                     {scoreResult?.feedback ?? t("scoreboard.fallbackFeedback")}
                   </p>
-                  {typeof scoreResult?.judgeConfidence === "number" && scoreResult.judgeConfidence !== null && (
-                    <p className="text-xs uppercase tracking-[0.35em] text-white/50">
-                      {t("scoreboard.confidence", { value: Math.round(scoreResult.judgeConfidence * 100) })}
-                    </p>
-                  )}
                 </div>
 
                 {!scoreResult?.correct && scoreResult?.judgeMissingElements && scoreResult.judgeMissingElements.length > 0 && (
@@ -636,15 +560,13 @@ export function RiddleClient() {
   const renderRiddle = () => (
     <div className="relative min-h-screen pb-24 text-white">
       <TopBar />
-      <main className="mx-auto mt-20 flex w-full max-w-6xl flex-col gap-12 px-6">
-        <header className="animate-section animate-delay-1 space-y-6 text-center lg:text-left">
+      <main className="mx-auto mt-16 flex w-full max-w-6xl flex-col gap-10 px-6">
+        <header className="animate-section animate-delay-1 space-y-4 text-center lg:text-left">
           <span className="muted-label">{t("riddle.stageLabel")}</span>
           <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
             {riddle?.title ?? (language === "fr" ? "Énigme mystère" : "Mystery riddle")}
-            <span className="block bg-gradient-to-r from-white via-primary to-accent bg-clip-text text-transparent">
-              {t("riddle.heroTitle")}
-            </span>
           </h1>
+          <p className="text-base text-white/70">{t("riddle.heroTitle")}</p>
           <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-white/70 lg:justify-start">
             <span className="rounded-full border border-white/20 px-4 py-1 font-semibold text-white/80">
               {t("riddle.puzzleNumber", { id: riddle?.id ?? "?" })}
@@ -663,48 +585,32 @@ export function RiddleClient() {
           </div>
         </header>
 
+        {riddle?.imageURL ? (
+          <div className="elevated-card animate-section animate-delay-2 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={riddle.imageURL} alt={t("riddle.heroTitle") ?? "Riddle illustration"} className="h-80 w-full object-cover" />
+          </div>
+        ) : (
+          <div className="glass-panel animate-section animate-delay-2 flex h-80 items-center justify-center text-sm text-white/60">
+            {language === "fr" ? "Illustration en cours de préparation…" : "Illustration loading soon…"}
+          </div>
+        )}
+
         <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-          <article className="elevated-card animate-section animate-delay-2 space-y-8 p-10 text-left text-white/80">
+          <article className="elevated-card animate-section animate-delay-3 space-y-8 p-10 text-left text-white/80">
             <div className="flex flex-wrap items-center justify-between gap-4 text-xs uppercase tracking-[0.35em] text-white/50">
               <span>#{riddle?.id ?? 0}</span>
               <span>{difficultyLabel}</span>
             </div>
             <div className="glow-divider" />
-            <div className="space-y-3">
+            <div className="space-y-4">
               <p className="muted-label">{t("riddle.promptLabel")}</p>
               <div className="prose prose-invert max-w-none text-base leading-relaxed text-white/80">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{riddle?.question ?? ""}</ReactMarkdown>
               </div>
             </div>
-          </article>
-
-          <div className="flex flex-col gap-6">
-            <div className="animate-section animate-delay-3">
-              <TimerPanel
-                state={countdownState}
-                label={t("timer.label")}
-                helper={t("timer.helper")}
-                statusLabels={{
-                  finished: t("timer.finished"),
-                  critical: t("timer.critical"),
-                  running: t("timer.running"),
-                  idle: t("timer.idle"),
-                }}
-              />
-            </div>
-
-            {riddle?.imageURL ? (
-              <div className="glass-panel animate-section animate-delay-3 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={riddle.imageURL} alt={t("riddle.heroTitle") ?? "Riddle illustration"} className="h-72 w-full object-cover" />
-              </div>
-            ) : (
-              <div className="glass-panel animate-section animate-delay-3 flex h-72 items-center justify-center text-sm text-white/60">
-                {language === "fr" ? "Illustration en cours de préparation…" : "Illustration loading soon…"}
-              </div>
-            )}
-
-            <section className="glass-panel animate-section animate-delay-4 space-y-4 p-8 text-white/80">
+            <div className="glow-divider" />
+            <section className="space-y-4">
               <h3 className="text-lg font-semibold text-white">{t("riddle.answerLabel")}</h3>
               <textarea
                 className="min-h-[140px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-white/40 focus:bg-white/10"
@@ -733,6 +639,22 @@ export function RiddleClient() {
                 </button>
               </div>
             </section>
+          </article>
+
+          <aside className="flex flex-col gap-6">
+            <div className="animate-section animate-delay-4">
+              <TimerPanel
+                state={countdownState}
+                label={t("timer.label")}
+                helper={t("timer.helper")}
+                statusLabels={{
+                  finished: t("timer.finished"),
+                  critical: t("timer.critical"),
+                  running: t("timer.running"),
+                  idle: t("timer.idle"),
+                }}
+              />
+            </div>
 
             <section className="glass-panel animate-section animate-delay-5 space-y-5 p-8 text-white/80">
               <div className="flex items-center justify-between">
@@ -753,15 +675,18 @@ export function RiddleClient() {
                     {t("riddle.hintReminder")}
                   </p>
                 )}
-                {revealedHints.map((index) => (
-                  <div key={`hint-${index}`} className="rounded-2xl border border-white/15 bg-white/5 p-4 text-white/80">
-                    <span className="text-xs font-semibold uppercase tracking-[0.4em] text-white/50">{t("riddle.hintSectionTitle")}</span>
-                    <p className="mt-2 text-sm leading-relaxed">{hints[index]}</p>
-                  </div>
-                ))}
+                {revealedHints.map((index) => {
+                  const label = t("riddle.hintLabel", { index: index + 1 });
+                  return (
+                    <div key={`hint-${index}`} className="rounded-2xl border border-white/15 bg-white/5 p-4 text-white/80">
+                      <span className="text-xs font-semibold uppercase tracking-[0.4em] text-white/50">{label}</span>
+                      <p className="mt-2 text-sm leading-relaxed">{hints[index]}</p>
+                    </div>
+                  );
+                })}
               </div>
             </section>
-          </div>
+          </aside>
         </section>
       </main>
     </div>

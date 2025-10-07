@@ -7,7 +7,7 @@ const JUDGE_CALIBRATION_BUCKET = process.env.JUDGE_CALIBRATION_BUCKET ?? "judge-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_JUDGE_MODEL = process.env.OPENAI_JUDGE_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
-type SupportedLanguage = "en" | "fr";
+export type SupportedLanguage = "en" | "fr";
 
 type JudgeCalibration = {
   instructions: string;

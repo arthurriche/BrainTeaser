@@ -73,12 +73,29 @@ const generateImageBuffer = async (
     model: OPENAI_IMAGE_MODEL,
     prompt: buildImagePrompt(question, score, difficulty),
     size: "1024x1024",
-    response_format: "b64_json",
   });
 
-  const base64 = response.data?.[0]?.b64_json;
-  if (!base64) return null;
-  return Buffer.from(base64, "base64");
+  const first = response.data?.[0];
+  const base64 = first?.b64_json;
+  if (base64) {
+    return Buffer.from(base64, "base64");
+  }
+
+  const url = first?.url;
+  if (!url) return null;
+
+  try {
+    const download = await fetch(url);
+    if (!download.ok) {
+      logImage("Failed to fetch generated image from URL", { status: download.status });
+      return null;
+    }
+    const arrayBuffer = await download.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error("Failed to download generated image", error);
+    return null;
+  }
 };
 
 const generateAndStore = async (

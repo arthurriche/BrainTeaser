@@ -41,6 +41,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         "Take a calm moment, read the brief overview, then launch the challenge when you feel prepared.",
       primaryCta: "Start the brain teaser",
       retry: "Refresh",
+      loading: "Loading up—stay sharp",
       info: {
         durationLabel: "Recommended duration",
         progressionLabel: "Puzzle",
@@ -91,7 +92,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       none: "No score recorded yet.",
     },
     riddle: {
-      stageLabel: "Resolution stage",
+      stageLabel: "Riddle",
       heroTitle: "Focus on the solution",
       puzzleNumber: (params) => `Puzzle #${getNumberParam(params, "id") || "?"}`,
       difficulty: (params) => getStringParam(params, "label"),
@@ -105,6 +106,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         hintsUsed: "Hints used",
       },
       hintSectionTitle: "Hints",
+      hintLabel: (params) => `Hint ${getNumberParam(params, "index")}`,
       hintReveal: (params) => `Reveal hint ${getNumberParam(params, "next")}`,
       hintReminder: "Use hints sparingly—each one lowers your final score.",
       submit: "Submit my answer",
@@ -138,6 +140,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         "Prends un moment de calme, découvre le contexte, puis lance le défi quand tu es prêt.",
       primaryCta: "Commencer le brain teaser",
       retry: "Actualiser",
+      loading: "Ça charge, sois prêt",
       info: {
         durationLabel: "Durée recommandée",
         progressionLabel: "Énigme",
@@ -188,7 +191,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       none: "Aucun score enregistré pour l'instant.",
     },
     riddle: {
-      stageLabel: "Étape de résolution",
+      stageLabel: "Énigme",
       heroTitle: "Concentre-toi sur la solution",
       puzzleNumber: (params) => `Énigme n°${getNumberParam(params, "id") || "?"}`,
       difficulty: (params) => getStringParam(params, "label"),
@@ -202,6 +205,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
         hintsUsed: "Indices utilisés",
       },
       hintSectionTitle: "Indices",
+      hintLabel: (params) => `Indice ${getNumberParam(params, "index")}`,
       hintReveal: (params) => `Révéler l'indice ${getNumberParam(params, "next")}`,
       hintReminder: "Utilise les indices avec parcimonie : chacun réduit ton score final.",
       submit: "Valider ma réponse",
