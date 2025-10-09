@@ -15,10 +15,7 @@ const normalizeScore = (value: number | null | undefined) => {
   return Math.max(0, Math.min(100, Math.round((value / MAX_RAW_SCORE) * 100)));
 };
 
-const createClient = async (): Promise<GenericSupabaseClient> => {
-  const cookieStore = await cookies();
-  return createRouteHandlerClient({ cookies: () => cookieStore });
-};
+const createClient = (): GenericSupabaseClient => createRouteHandlerClient({ cookies });
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -44,7 +41,7 @@ export async function GET(request: Request) {
 
   try {
     console.log("[Scoreboard] Incoming request", { riddleId, language });
-    const supabase = await createClient();
+    const supabase = createClient();
     const {
       data: { session },
     } = await supabase.auth.getSession();

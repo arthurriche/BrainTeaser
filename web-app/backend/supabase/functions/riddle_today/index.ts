@@ -3,7 +3,9 @@
 // This enables autocomplete, go to definition, etc.
 
 // Setup type definitions for built-in Supabase Runtime APIs
+// @ts-ignore Deno edge runtime declaration only available during Supabase deploy
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+// @ts-ignore Deno-friendly import resolved at runtime by Supabase Edge
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Create a client using env vars injected by the Supabase CLI / Edge Runtime
