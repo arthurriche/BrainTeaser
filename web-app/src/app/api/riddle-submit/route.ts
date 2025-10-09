@@ -350,8 +350,6 @@ export async function POST(request: Request) {
       correct,
       score,
       rankingPercent,
-      imagePending,
-      hasImage: Boolean(resultImageURL),
     });
     return NextResponse.json(payload);
   } catch (error) {
