@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
 import Confetti from "react-confetti";
 import ReactMarkdown from "react-markdown";
@@ -11,6 +11,8 @@ import { TimerPanel } from "@/components/riddle/TimerPanel";
 import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
+
+const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
 interface RiddlePayload {
   id: number;
@@ -110,6 +112,314 @@ const getDateFormatter = (language: string) =>
     month: "long",
     year: "numeric",
   });
+
+const MIN_DONATION_CENTS = 10;
+const MAX_DONATION_CENTS = 200;
+const DONATION_STEP_CENTS = 10;
+const DEFAULT_DONATION_CENTS = 30;
+
+type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+
+const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en" | "fr" }) => {
+  const [amountCents, setAmountCents] = useState(DEFAULT_DONATION_CENTS);
+  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [stripe, setStripe] = useState<Stripe | null>(null);
+  const [paymentRequest, setPaymentRequest] = useState<StripePaymentRequest | null>(null);
+  const [canUseApplePay, setCanUseApplePay] = useState(false);
+  const buttonContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const formattedAmount = useMemo(
+    () =>
+      new Intl.NumberFormat(language === "fr" ? "fr-FR" : "en-US", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 2,
+      }).format(amountCents / 100),
+    [amountCents, language],
+  );
+
+  const supportTitle = t("scoreboard.supportTitle");
+  const supportSubtitle = t("scoreboard.supportSubtitle");
+  const amountLabel = t("scoreboard.supportAmountLabel");
+  const totalLabel = t("scoreboard.supportTotalLabel");
+  const unavailable = t("scoreboard.supportUnavailable");
+  const configureMessage = t("scoreboard.supportConfigure");
+  const processingMessage = t("scoreboard.supportProcessing");
+  const successMessage = t("scoreboard.supportSuccess", { amount: formattedAmount });
+  const genericError = t("scoreboard.supportErrorGeneric");
+  const scriptError = t("scoreboard.supportScriptError");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !STRIPE_PUBLISHABLE_KEY) return;
+    let cancelled = false;
+
+    const initialiseStripe = () => {
+      if (cancelled || !window.Stripe) return;
+      try {
+        const instance = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        setStripe(instance);
+      } catch (error) {
+        console.error("[SupportApplePay] Failed to initialise Stripe", error);
+        setErrorMessage(scriptError);
+        setStatus("error");
+      }
+    };
+
+    if (window.Stripe) {
+      initialiseStripe();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    let script = document.querySelector<HTMLScriptElement>('script[src="https://js.stripe.com/v3"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = "https://js.stripe.com/v3";
+      script.async = true;
+      script.onload = initialiseStripe;
+      script.onerror = () => {
+        if (!cancelled) {
+          setErrorMessage(scriptError);
+          setStatus("error");
+        }
+      };
+      document.body.appendChild(script);
+    } else {
+      script.addEventListener("load", initialiseStripe);
+    }
+
+    return () => {
+      cancelled = true;
+      if (script) {
+        script.removeEventListener("load", initialiseStripe);
+        script.onload = null;
+        script.onerror = null;
+      }
+    };
+  }, [scriptError]);
+
+  useEffect(() => {
+    if (!stripe) {
+      setPaymentRequest(null);
+      setCanUseApplePay(false);
+      return;
+    }
+
+    const request = stripe.paymentRequest({
+      country: "FR",
+      currency: "eur",
+      total: { label: totalLabel, amount: DEFAULT_DONATION_CENTS },
+      requestPayerEmail: true,
+      requestPayerName: true,
+    });
+
+    let active = true;
+    request.canMakePayment().then((result) => {
+      if (!active) return;
+      const supported = Boolean(result?.applePay);
+      setCanUseApplePay(supported);
+      if (!supported) {
+        setErrorMessage(unavailable);
+      } else {
+        setErrorMessage(null);
+      }
+    });
+
+    setPaymentRequest(request);
+
+    return () => {
+      active = false;
+      setPaymentRequest(null);
+      setCanUseApplePay(false);
+    };
+  }, [stripe, totalLabel, unavailable]);
+
+  useEffect(() => {
+    if (!paymentRequest) return;
+    paymentRequest.update({
+      total: {
+        label: totalLabel,
+        amount: Math.min(Math.max(amountCents, MIN_DONATION_CENTS), MAX_DONATION_CENTS),
+      },
+    });
+  }, [paymentRequest, amountCents, totalLabel]);
+
+  useEffect(() => {
+    if (!paymentRequest || !stripe) return;
+
+    const handlePaymentMethod = async (event: StripePaymentRequestPaymentMethodEvent) => {
+      if (!stripe) {
+        event.complete("fail");
+        setStatus("error");
+        setErrorMessage(genericError);
+        return;
+      }
+      setStatus("processing");
+      setErrorMessage(null);
+
+      try {
+        const response = await fetch("/api/support/donate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amountCents: Math.min(Math.max(amountCents, MIN_DONATION_CENTS), MAX_DONATION_CENTS),
+            paymentMethodId: event.paymentMethod.id,
+            locale: language,
+          }),
+        });
+        const payload = (await response.json()) as {
+          clientSecret?: string | null;
+          requiresAction?: boolean;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          const message = typeof payload?.error === "string" && payload.error.length > 0 ? payload.error : genericError;
+          setStatus("error");
+          setErrorMessage(message);
+          event.complete("fail");
+          return;
+        }
+
+        if (payload?.requiresAction && payload?.clientSecret) {
+          const confirmation = await stripe.confirmCardPayment(payload.clientSecret);
+          if (confirmation.error) {
+            setStatus("error");
+            setErrorMessage(confirmation.error.message ?? genericError);
+            event.complete("fail");
+            return;
+          }
+        }
+
+        setStatus("success");
+        setErrorMessage(null);
+        event.complete("success");
+      } catch (error) {
+        console.error("[SupportApplePay] Donation failed", error);
+        setStatus("error");
+        setErrorMessage(genericError);
+        event.complete("fail");
+      }
+    };
+
+    paymentRequest.on("paymentmethod", handlePaymentMethod);
+    return () => {
+      paymentRequest.off("paymentmethod", handlePaymentMethod);
+    };
+  }, [paymentRequest, stripe, amountCents, genericError, language]);
+
+  useEffect(() => {
+    if (!stripe || !paymentRequest || !buttonContainerRef.current || !canUseApplePay) return;
+    const elements = stripe.elements();
+    const button = elements.create("paymentRequestButton", {
+      paymentRequest,
+      style: {
+        paymentRequestButton: {
+          type: "donate",
+          theme: "dark",
+          height: "44px",
+        },
+      },
+    });
+
+    const container = buttonContainerRef.current;
+    if (container) {
+      container.innerHTML = "";
+      button.mount(container);
+    }
+
+    return () => {
+      try {
+        button.unmount();
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+  }, [stripe, paymentRequest, canUseApplePay]);
+
+  useEffect(() => {
+    if (status !== "success") return;
+    const timer = window.setTimeout(() => {
+      setStatus("idle");
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = Number.parseInt(event.target.value, 10);
+    if (!Number.isNaN(nextValue)) {
+      setAmountCents(nextValue);
+      if (status !== "processing") {
+        setStatus("idle");
+        setErrorMessage(null);
+      }
+    }
+  };
+
+  const sliderDisabled = status === "processing";
+
+  return (
+    <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-5 text-left shadow-lg">
+      <p className="text-sm font-semibold text-white/80">{supportTitle}</p>
+      <p className="mt-1 text-xs text-white/60">{supportSubtitle}</p>
+
+      <div className="mt-4">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-white/50">
+          {amountLabel}
+        </label>
+        <div className="mt-2 flex items-center gap-3">
+          <input
+            type="range"
+            min={MIN_DONATION_CENTS}
+            max={MAX_DONATION_CENTS}
+            step={DONATION_STEP_CENTS}
+            value={amountCents}
+            onChange={handleSliderChange}
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-amber-300"
+            disabled={sliderDisabled}
+          />
+          <span className="min-w-[70px] text-sm font-semibold text-white">{formattedAmount}</span>
+        </div>
+      </div>
+
+      {STRIPE_PUBLISHABLE_KEY ? (
+        canUseApplePay ? (
+          <div className="mt-4">
+            <div ref={buttonContainerRef} className="overflow-hidden rounded-full shadow-lg" />
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
+            {errorMessage ?? unavailable}
+          </p>
+        )
+      ) : (
+        <p className="mt-4 rounded-xl border border-amber-200/40 bg-amber-200/10 px-3 py-2 text-xs text-amber-100">
+          {configureMessage}
+        </p>
+      )}
+
+      {status !== "idle" && (
+        <p
+          className={`mt-3 text-xs ${
+            status === "processing"
+              ? "text-white/70"
+              : status === "success"
+                ? "text-emerald-200"
+                : "text-rose-200"
+          }`}
+        >
+          {status === "processing"
+            ? processingMessage
+            : status === "success"
+              ? successMessage
+              : errorMessage ?? genericError}
+        </p>
+      )}
+    </div>
+  );
+};
 
 export function RiddleClient() {
   const { t, language } = useTranslations();
@@ -535,13 +845,7 @@ export function RiddleClient() {
               </div>
 
               <div className="flex flex-col items-center gap-4 text-sm text-white/70">
-                <button
-                  type="button"
-                  className="button-aurora hover-lift rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:from-amber-200 hover:via-amber-300 hover:to-orange-300"
-                  onClick={() => window.alert(language === "fr" ? "Apple Pay arrive bientôt. Merci pour ton enthousiasme !" : "Apple Pay support is coming soon. Thanks for your enthusiasm!")}
-                >
-                  {t("scoreboard.support")}
-                </button>
+                <SupportApplePaySection t={t} language={language} />
                 <button
                   type="button"
                   className="hover-lift rounded-full border border-amber-200/40 px-5 py-2 font-medium text-white transition hover:bg-amber-300/10"

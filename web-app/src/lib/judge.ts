@@ -4,7 +4,6 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const JUDGE_CALIBRATION_BUCKET = process.env.JUDGE_CALIBRATION_BUCKET ?? "judge-calibrations";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_JUDGE_MODEL = process.env.OPENAI_JUDGE_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
 export type SupportedLanguage = "en" | "fr";
@@ -25,9 +24,12 @@ export type JudgeEvaluation = {
 
 let adminClient: SupabaseClient | null = null;
 let openaiClient: OpenAI | null = null;
+let cachedOpenAIKey: string | null = null;
 const memoryCache = new Map<string, { day: string; calibration: JudgeCalibration }>();
 
 const cacheKey = (riddleId: number, language: SupportedLanguage) => `${language}-${riddleId}`;
+
+const resolveOpenAIKey = () => process.env.OPENAI_API_KEY?.trim() ?? "";
 
 const getAdminClient = () => {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return null;
@@ -38,9 +40,11 @@ const getAdminClient = () => {
 };
 
 const getOpenAIClient = () => {
-  if (!OPENAI_API_KEY) return null;
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+  const apiKey = resolveOpenAIKey();
+  if (!apiKey) return null;
+  if (!openaiClient || cachedOpenAIKey !== apiKey) {
+    openaiClient = new OpenAI({ apiKey });
+    cachedOpenAIKey = apiKey;
   }
   return openaiClient;
 };

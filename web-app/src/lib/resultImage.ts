@@ -5,11 +5,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RESULT_IMAGE_BUCKET = process.env.RESULT_IMAGE_BUCKET ?? "generated-results";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
 
 let adminClient: SupabaseClient | null = null;
 let openaiClient: OpenAI | null = null;
+let cachedOpenAIKey: string | null = null;
 const runtimeImageCache = new Map<string, { day: string; url: string }>();
 const logImage = (...args: unknown[]) => {
   console.log("[ResultImage]", ...args);
@@ -26,10 +26,14 @@ const getAdminClient = () => {
   return adminClient;
 };
 
+const resolveOpenAIKey = () => process.env.OPENAI_API_KEY?.trim() ?? "";
+
 const getOpenAIClient = () => {
-  if (!OPENAI_API_KEY) return null;
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+  const apiKey = resolveOpenAIKey();
+  if (!apiKey) return null;
+  if (!openaiClient || cachedOpenAIKey !== apiKey) {
+    openaiClient = new OpenAI({ apiKey });
+    cachedOpenAIKey = apiKey;
   }
   return openaiClient;
 };
@@ -162,7 +166,7 @@ export const ensureResultImage = async (
       riddleId,
       eager,
     });
-    if (!OPENAI_API_KEY) {
+    if (!resolveOpenAIKey()) {
       logImage("Missing OPENAI_API_KEY. Returning null image.");
       return buildResult(null, false);
     }

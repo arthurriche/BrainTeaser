@@ -12,11 +12,17 @@ Version web en cours de construction pour l'application Enigmate. Ce dossier con
    ```bash
    NEXT_PUBLIC_SUPABASE_URL="https://...supabase.co"
    NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
+   SUPABASE_SERVICE_ROLE_KEY="..."
+   OPENAI_API_KEY="sk-..."
+   STRIPE_SECRET_KEY="sk_test_..."
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
    ```
+   > Les clés `STRIPE_SECRET_KEY` et `OPENAI_API_KEY` ne doivent jamais être exposées côté client. Gardez-les dans `.env.local` et dans la configuration environnement Vercel.
 2. Vérifiez que la fonction edge `riddle_today` est déployée (cf. `backend/supabase/functions/riddle_today`).
 3. Dans Supabase, mettez à jour les URL de redirection OAuth LinkedIn pour inclure :
    - `https://votre-domaine/auth/callback`
    - `http://localhost:3000/auth/callback` (pour le dev)
+4. (Apple Pay) Ajoutez votre domaine dans le Dashboard Stripe (`Payments → Apple Pay`) et exposez le fichier `/.well-known/apple-developer-merchantid-domain-association` depuis `public/.well-known/`. Sans cette vérification, Apple Pay refusera le paiement.
 
 ## Lancer le projet
 ```bash

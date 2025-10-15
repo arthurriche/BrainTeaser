@@ -4,12 +4,12 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1";
 const RIDDLE_IMAGE_BUCKET = process.env.RIDDLE_IMAGE_BUCKET ?? "riddle-images";
 
 let adminClient: SupabaseClient | null = null;
 let openaiClient: OpenAI | null = null;
+let cachedOpenAIKey: string | null = null;
 
 const log = (...args: unknown[]) => {
   console.log("[RiddleImage]", ...args);
@@ -27,12 +27,14 @@ const getAdminClient = () => {
 };
 
 const getOpenAIClient = () => {
-  if (!OPENAI_API_KEY) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
     log("Missing OPENAI_API_KEY. Skipping illustration generation.");
     return null;
   }
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+  if (!openaiClient || cachedOpenAIKey !== apiKey) {
+    openaiClient = new OpenAI({ apiKey });
+    cachedOpenAIKey = apiKey;
   }
   return openaiClient;
 };

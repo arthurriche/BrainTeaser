@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? process.env.OPENAI_JUDGE_MODEL ?? "gpt-4o-mini";
 
-const client = OPENAI_KEY ? new OpenAI({ apiKey: OPENAI_KEY }) : null;
+let cachedClient: OpenAI | null = null;
+let cachedKey: string | null = null;
+
+const getOpenAIClient = () => {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+  if (!cachedClient || cachedKey !== apiKey) {
+    cachedClient = new OpenAI({ apiKey });
+    cachedKey = apiKey;
+  }
+  return cachedClient;
+};
 
 export async function POST(request: Request) {
   try {
@@ -17,6 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ title: null, question: null });
     }
 
+    const client = getOpenAIClient();
     if (!client) {
       return NextResponse.json({ title, question });
     }
