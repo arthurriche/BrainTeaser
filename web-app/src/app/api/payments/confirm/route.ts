@@ -221,7 +221,7 @@ export async function POST(request: Request) {
         user_id: session.user.id,
         access_type: "subscription",
         riddle_id: null,
-        valid_until,
+        valid_until: validUntil,
         stripe_session_id: sessionId,
         created_at: nowIso,
       });
