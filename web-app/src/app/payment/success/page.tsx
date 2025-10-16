@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 
@@ -45,7 +45,7 @@ const getCurrencyFormatter = (locale: "en" | "fr") =>
     minimumFractionDigits: 2,
   });
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const { t, language } = useTranslations();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -196,5 +196,19 @@ export default function PaymentSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-white">
+          <Loader2 className="h-10 w-10 animate-spin text-amber-200" />
+        </div>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
