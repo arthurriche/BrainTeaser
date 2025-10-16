@@ -3,7 +3,6 @@
 
 import Link from "next/link";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Stripe, StripePaymentRequest } from "@stripe/stripe-js";
 import { Loader2, TriangleAlert } from "lucide-react";
 import Confetti from "react-confetti";
 import ReactMarkdown from "react-markdown";
@@ -46,6 +45,50 @@ type SocialLinks = {
   instagramUrl: string;
   linkedinUrl: string;
 };
+
+type StripePaymentRequestPaymentMethodEvent = {
+  paymentMethod: { id: string };
+  complete: (status: "success" | "fail") => void;
+};
+
+type StripePaymentRequest = {
+  canMakePayment: () => Promise<{ applePay?: boolean } | null>;
+  update: (details: { total: { label: string; amount: number } }) => void;
+  on: (event: "paymentmethod", handler: (event: StripePaymentRequestPaymentMethodEvent) => void) => void;
+  off: (event: "paymentmethod", handler: (event: StripePaymentRequestPaymentMethodEvent) => void) => void;
+};
+
+type Stripe = {
+  paymentRequest: (options: {
+    country: string;
+    currency: string;
+    total: { label: string; amount: number };
+    requestPayerEmail?: boolean;
+    requestPayerName?: boolean;
+  }) => StripePaymentRequest;
+  confirmCardPayment: (clientSecret: string) => Promise<{ error?: { message?: string } }>;
+  elements: () => {
+    create: (
+      type: "paymentRequestButton",
+      options: {
+        paymentRequest: StripePaymentRequest;
+        style?: {
+          paymentRequestButton?: {
+            type?: string;
+            theme?: string;
+            height?: string;
+          };
+        };
+      },
+    ) => { mount: (element: Element | string) => void; unmount: () => void };
+  };
+};
+
+declare global {
+  interface Window {
+    Stripe?: (publishableKey: string) => Stripe;
+  }
+}
 
 interface ScoreResult {
   correct: boolean;
