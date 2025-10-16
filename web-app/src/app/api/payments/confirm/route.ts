@@ -28,6 +28,9 @@ type StripeCheckoutSession = {
       }
     | null
     | string;
+  error?: {
+    message?: string;
+  };
   [key: string]: unknown;
 };
 
