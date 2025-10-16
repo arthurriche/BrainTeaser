@@ -13,7 +13,7 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
 import { SOCIAL_LINKS } from "@/lib/premium";
-import type { Stripe, StripePaymentRequest, StripePaymentRequestPaymentMethodEvent } from "@types/stripe";
+import type { Stripe, StripePaymentRequest, StripePaymentRequestPaymentMethodEvent } from "../../../types/stripe";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
