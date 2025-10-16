@@ -16,6 +16,10 @@ import { SOCIAL_LINKS } from "@/lib/premium";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
+type Stripe = import("@/types/stripe-globals").StripeType;
+type StripePaymentRequest = import("@/types/stripe-globals").StripePaymentRequestType;
+type StripePaymentRequestPaymentMethodEvent = import("@/types/stripe-globals").StripePaymentRequestPaymentMethodEventType;
+
 interface RiddlePayload {
   id: number;
   question: string;
