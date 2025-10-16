@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Stripe, StripePaymentRequest } from "@stripe/stripe-js";
 import { Loader2, TriangleAlert } from "lucide-react";
 import Confetti from "react-confetti";
 import ReactMarkdown from "react-markdown";
