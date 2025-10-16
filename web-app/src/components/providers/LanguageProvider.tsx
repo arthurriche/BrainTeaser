@@ -92,7 +92,10 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       supportConfigure: "Configure Stripe keys to enable Apple Pay donations.",
       supportUnavailable: "Apple Pay isn't available on this device. Try Safari on an Apple Pay enabled device.",
       supportProcessing: "Processing your Apple Pay donation…",
-      supportSuccess: ({ amount }) => `Thanks! ${typeof amount === "string" ? amount : "€0.30"} pledged.`,
+      supportSuccess: (params) => {
+        const amount = params && typeof params === "object" ? (params as { amount?: unknown }).amount : undefined;
+        return `Thanks! ${typeof amount === "string" ? amount : "€0.30"} pledged.`;
+      },
       supportErrorGeneric: "Unable to complete the donation.",
       supportScriptError: "Stripe.js could not be loaded. Check your network or configuration.",
       premiumTitle: "Unlock the full debrief",
@@ -251,7 +254,10 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       supportConfigure: "Configure les clés Stripe pour activer les dons Apple Pay.",
       supportUnavailable: "Apple Pay n'est pas disponible sur cet appareil. Essaie depuis Safari avec Apple Pay activé.",
       supportProcessing: "Traitement de ton don Apple Pay…",
-      supportSuccess: ({ amount }) => `Merci ! ${typeof amount === "string" ? amount : "0,30 €"} versés pour soutenir les énigmes.`,
+      supportSuccess: (params) => {
+        const amount = params && typeof params === "object" ? (params as { amount?: unknown }).amount : undefined;
+        return `Merci ! ${typeof amount === "string" ? amount : "0,30 €"} versés pour soutenir les énigmes.`;
+      },
       supportErrorGeneric: "Le don n'a pas pu être finalisé.",
       supportScriptError: "Impossible de charger Stripe.js. Vérifie ta connexion ou ta configuration.",
       premiumTitle: "Débloque le débrief complet",
