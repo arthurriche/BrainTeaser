@@ -63,12 +63,4 @@ declare global {
   }
 }
 
-export type StripePaymentRequestOptionsType = StripePaymentRequestOptions;
-export type StripePaymentRequestPaymentMethodEventType = StripePaymentRequestPaymentMethodEvent;
-export type StripePaymentRequestType = StripePaymentRequest;
-export type StripeElementsType = StripeElements;
-export type StripeConfirmationResultType = StripeConfirmationResult;
-export type StripeType = Stripe;
-export type StripeConstructorType = StripeConstructor;
-
 export {};

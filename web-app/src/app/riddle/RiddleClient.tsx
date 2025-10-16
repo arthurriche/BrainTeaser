@@ -13,12 +13,9 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
 import { SOCIAL_LINKS } from "@/lib/premium";
+import type { Stripe, StripePaymentRequest, StripePaymentRequestPaymentMethodEvent } from "@types/stripe";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-
-type Stripe = import("@types/stripe-globals").StripeType;
-type StripePaymentRequest = import("@types/stripe-globals").StripePaymentRequestType;
-type StripePaymentRequestPaymentMethodEvent = import("@types/stripe-globals").StripePaymentRequestPaymentMethodEventType;
 
 interface RiddlePayload {
   id: number;
