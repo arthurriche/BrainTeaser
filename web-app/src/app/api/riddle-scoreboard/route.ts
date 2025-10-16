@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { PREMIUM_PRICES, SOCIAL_LINKS } from "@/lib/premium";
+import { evaluatePremiumAccess } from "@/lib/server/premium-access";
+import { formatScoreSummary } from "@/lib/scoreSummary";
 import { translateRiddleContent } from "@/lib/translation";
 
 type GenericSupabaseClient = SupabaseClient;
@@ -71,6 +74,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ hasScore: false });
     }
 
+    const premiumAccess = await evaluatePremiumAccess(supabase, session.user.id, riddleId);
+
     const normalizedScore = normalizeScore(existingScore.score ?? 0);
 
     console.log("[Scoreboard] Score row fetched", {
@@ -79,55 +84,77 @@ export async function GET(request: Request) {
       score: normalizedScore,
       duration: existingScore.duration,
       msgCount: existingScore.msg_count,
+      premiumUnlocked: premiumAccess.unlocked,
+      premiumType: premiumAccess.type,
     });
 
-    const { data: riddle, error: riddleError } = await supabase
-      .from("riddles")
-      .select("title,question,solution,hint1,hint2,hint3,difficulty,duration")
-      .eq("id", riddleId)
-      .maybeSingle();
+    let displayTitle: string | null = null;
+    let displayQuestion: string | null = null;
+    let displaySolution: string | null = null;
+    let displayHints: string[] = [];
 
-    if (riddleError) {
-      throw new Error(riddleError.message);
+    if (premiumAccess.unlocked) {
+      const { data: riddle, error: riddleError } = await supabase
+        .from("riddles")
+        .select("title,question,solution,hint1,hint2,hint3")
+        .eq("id", riddleId)
+        .maybeSingle();
+
+      if (riddleError) {
+        throw new Error(riddleError.message);
+      }
+
+      console.log("[Scoreboard] Premium riddle context fetched", {
+        riddleId,
+        hasQuestion: Boolean(riddle?.question),
+        hasSolution: Boolean(riddle?.solution),
+      });
+
+      let tempTitle = riddle?.title ?? null;
+      let tempQuestion = riddle?.question ?? null;
+      let tempSolution = riddle?.solution ?? null;
+      let tempHints = {
+        hint1: riddle?.hint1 ?? null,
+        hint2: riddle?.hint2 ?? null,
+        hint3: riddle?.hint3 ?? null,
+      };
+
+      const translated = await translateRiddleContent(
+        {
+          title: tempTitle,
+          question: tempQuestion,
+          solution: tempSolution,
+          hints: tempHints,
+        },
+        language,
+      );
+      tempTitle = translated.title ?? tempTitle;
+      tempQuestion = translated.question ?? tempQuestion;
+      tempSolution = translated.solution ?? tempSolution;
+      tempHints = {
+        hint1: translated.hints?.hint1 ?? tempHints.hint1,
+        hint2: translated.hints?.hint2 ?? tempHints.hint2,
+        hint3: translated.hints?.hint3 ?? tempHints.hint3,
+      };
+
+      displayTitle = tempTitle;
+      displayQuestion = tempQuestion;
+      displaySolution = tempSolution;
+      displayHints = [tempHints.hint1, tempHints.hint2, tempHints.hint3].filter(
+        (hint): hint is string => Boolean(hint),
+      );
+    } else {
+      const { data: riddleMeta, error: riddleMetaError } = await supabase
+        .from("riddles")
+        .select("title")
+        .eq("id", riddleId)
+        .maybeSingle();
+
+      if (riddleMetaError) {
+        throw new Error(riddleMetaError.message);
+      }
+      displayTitle = riddleMeta?.title ?? null;
     }
-
-    console.log("[Scoreboard] Riddle context fetched", {
-      riddleId,
-      hasQuestion: Boolean(riddle?.question),
-      hasSolution: Boolean(riddle?.solution),
-      difficulty: riddle?.difficulty,
-    });
-
-    let displayTitle = riddle?.title ?? null;
-    let displayQuestion = riddle?.question ?? null;
-    let displaySolution = riddle?.solution ?? null;
-    let displayHintsMap = {
-      hint1: riddle?.hint1 ?? null,
-      hint2: riddle?.hint2 ?? null,
-      hint3: riddle?.hint3 ?? null,
-    };
-
-    const translated = await translateRiddleContent(
-      {
-        title: displayTitle,
-        question: displayQuestion,
-        solution: displaySolution,
-        hints: displayHintsMap,
-      },
-      language,
-    );
-    displayTitle = translated.title ?? displayTitle;
-    displayQuestion = translated.question ?? displayQuestion;
-    displaySolution = translated.solution ?? displaySolution;
-    displayHintsMap = {
-      hint1: translated.hints?.hint1 ?? displayHintsMap.hint1,
-      hint2: translated.hints?.hint2 ?? displayHintsMap.hint2,
-      hint3: translated.hints?.hint3 ?? displayHintsMap.hint3,
-    };
-
-    const hints = [displayHintsMap.hint1, displayHintsMap.hint2, displayHintsMap.hint3].filter(
-      (hint): hint is string => Boolean(hint),
-    );
 
     const { data: scoreRows, error: scoreListError } = await supabase
       .from("scores")
@@ -158,6 +185,31 @@ export async function GET(request: Request) {
       rankingPercent,
     });
 
+    const summary = formatScoreSummary({
+      language,
+      score: normalizedScore,
+      rankingPercent,
+      timeSpent: existingScore.duration ?? null,
+    });
+    const lockedMessage =
+      language === "fr"
+        ? "Débloque le débrief complet pour accéder à l'analyse détaillée."
+        : "Unlock premium to access the full breakdown.";
+
+    const unlockOptions = {
+      single: {
+        amountCents: PREMIUM_PRICES.single.amountCents,
+        currency: PREMIUM_PRICES.single.currency,
+      },
+      subscription: {
+        amountCents: PREMIUM_PRICES.subscription.amountCents,
+        currency: PREMIUM_PRICES.subscription.currency,
+      },
+    };
+    const isLocked = !premiumAccess.unlocked;
+    const feedbackShort = summary;
+    const feedback = isLocked ? `${summary} ${lockedMessage}`.trim() : null;
+
     return NextResponse.json({
       hasScore: true,
       score: normalizedScore,
@@ -167,10 +219,25 @@ export async function GET(request: Request) {
       totalPlayers,
       beatenPlayers,
       rankingPercent,
-      hints,
-      question: displayQuestion,
-      officialAnswer: displaySolution,
+      hints: premiumAccess.unlocked ? displayHints : [],
+      question: premiumAccess.unlocked ? displayQuestion : null,
+      officialAnswer: premiumAccess.unlocked ? displaySolution : null,
       riddleTitle: displayTitle,
+      premiumAccess: {
+        unlocked: premiumAccess.unlocked,
+        type: premiumAccess.type,
+        validUntil: premiumAccess.validUntil,
+      },
+      unlockOptions,
+      socialLinks: SOCIAL_LINKS,
+      feedback,
+      feedbackShort,
+      locked: isLocked,
+      lockReason: premiumAccess.unlocked
+        ? null
+        : language === "fr"
+          ? "Abonne-toi ou débloque cette énigme pour voir les indices et la solution officielle."
+          : "Subscribe or unlock this puzzle to view the hints and official solution.",
     });
   } catch (error) {
     console.error("[Scoreboard] Failed to fetch data", { riddleId, lang: language }, error);

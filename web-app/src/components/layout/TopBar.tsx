@@ -38,6 +38,12 @@ export function TopBar() {
       </Link>
 
       <div className="flex items-center gap-3">
+        <Link
+          href="/resources"
+          className="inline-flex rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/80 transition hover:bg-white/10 hover:text-white"
+        >
+          {t("nav.resources")}
+        </Link>
         <LanguageToggle />
         {session && (
           <button

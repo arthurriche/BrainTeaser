@@ -3,9 +3,9 @@
 // This enables autocomplete, go to definition, etc.
 
 // Setup type definitions for built-in Supabase Runtime APIs
-// @ts-ignore Deno edge runtime declaration only available during Supabase deploy
+// @ts-expect-error Deno edge runtime declaration only available during Supabase deploy
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-// @ts-ignore Deno-friendly import resolved at runtime by Supabase Edge
+// @ts-expect-error Deno-friendly import resolved at runtime by Supabase Edge
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Create a client using env vars injected by the Supabase CLI / Edge Runtime
@@ -14,7 +14,7 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Edge Function: GET today's riddle (id, question, signed image URL)
-Deno.serve(async (_req) => {
+Deno.serve(async () => {
   // Today in YYYY‑MM‑DD (UTC)
   const today = new Date().toISOString().slice(0, 10);
   console.log(`Looking for riddle with release_date: ${today}`);

@@ -1,6 +1,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
 import Confetti from "react-confetti";
@@ -11,6 +12,7 @@ import { TimerPanel } from "@/components/riddle/TimerPanel";
 import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
+import { SOCIAL_LINKS } from "@/lib/premium";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
@@ -27,10 +29,27 @@ interface RiddlePayload {
   hint3?: string | null;
 }
 
+type PremiumAccessState = {
+  unlocked: boolean;
+  type: "single" | "subscription" | null;
+  validUntil: string | null;
+};
+
+type UnlockOptions = {
+  single: { amountCents: number; currency: string };
+  subscription: { amountCents: number; currency: string };
+};
+
+type SocialLinks = {
+  instagramHandle: string;
+  instagramUrl: string;
+  linkedinUrl: string;
+};
+
 interface ScoreResult {
   correct: boolean;
   score: number;
-  feedback: string;
+  feedback: string | null;
   hintsUsed: number;
   timeSpent: number;
   userMessages: number;
@@ -44,6 +63,12 @@ interface ScoreResult {
   question?: string | null;
   officialAnswer?: string | null;
   riddleTitle?: string | null;
+  locked?: boolean;
+  premiumAccess?: PremiumAccessState | null;
+  unlockOptions?: UnlockOptions | null;
+  socialLinks?: SocialLinks | null;
+  feedbackShort?: string | null;
+  lockReason?: string | null;
 }
 
 const DIFFICULTY_MAP: Record<number, { en: string; fr: string }> = {
@@ -76,9 +101,9 @@ const mergeScoreData = (
   correct: overrides.correct ?? base?.correct ?? false,
   score: overrides.score,
   feedback:
-    overrides.feedback ??
-    base?.feedback ??
-    "Your attempt is saved. Analyse the hints to improve your next answer.",
+    overrides.feedback !== undefined
+      ? overrides.feedback
+      : base?.feedback ?? "Your attempt is saved. Analyse the hints to improve your next answer.",
   hintsUsed: overrides.hintsUsed ?? base?.hintsUsed ?? 0,
   timeSpent: overrides.timeSpent ?? base?.timeSpent ?? 0,
   userMessages: overrides.userMessages ?? base?.userMessages ?? 0,
@@ -92,6 +117,13 @@ const mergeScoreData = (
   question: overrides.question ?? base?.question ?? null,
   officialAnswer: overrides.officialAnswer ?? base?.officialAnswer ?? null,
   riddleTitle: overrides.riddleTitle ?? base?.riddleTitle ?? null,
+  locked: overrides.locked ?? base?.locked ?? false,
+  premiumAccess: overrides.premiumAccess ?? base?.premiumAccess ?? null,
+  unlockOptions: overrides.unlockOptions ?? base?.unlockOptions ?? null,
+  socialLinks: overrides.socialLinks ?? base?.socialLinks ?? null,
+  feedbackShort:
+    overrides.feedbackShort !== undefined ? overrides.feedbackShort : base?.feedbackShort ?? null,
+  lockReason: overrides.lockReason ?? base?.lockReason ?? null,
 });
 
 const useViewportSize = () => {
@@ -434,11 +466,23 @@ export function RiddleClient() {
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [scoreboardError, setScoreboardError] = useState<string | null>(null);
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<"single" | "subscription" | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const viewport = useViewportSize();
 
   const [countdownState, countdownControls] = useCountdown();
   const { start, pause, reset } = countdownControls;
+
+  const priceFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(language === "fr" ? "fr-FR" : "en-US", {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 2,
+      }),
+    [language],
+  );
 
   const loadRiddle = useCallback(async () => {
     setLoading(true);
@@ -508,6 +552,52 @@ export function RiddleClient() {
     setRevealedHints((prev) => [...prev, prev.length]);
   }, [hasMoreHints]);
 
+  const handleCheckout = useCallback(
+    async (plan: "single" | "subscription") => {
+      if (plan === "single" && (!riddle?.id || riddle.id <= 0)) {
+        setCheckoutError(t("scoreboard.premiumErrorUnavailable"));
+        return;
+      }
+
+      setCheckoutError(null);
+      setCheckoutLoading(plan);
+
+      try {
+        const response = await fetch("/api/payments/create-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            plan === "single"
+              ? { kind: "single_riddle", riddleId: riddle?.id, locale: language }
+              : { kind: "subscription", locale: language },
+          ),
+        });
+
+        const data = (await response.json()) as { url?: string; error?: string };
+
+        if (!response.ok || !data?.url) {
+          throw new Error(
+            typeof data?.error === "string" && data.error.length > 0
+              ? data.error
+              : t("scoreboard.premiumErrorGeneric"),
+          );
+        }
+
+        window.location.assign(data.url);
+      } catch (error) {
+        console.error("[Checkout] Failed to start payment", error);
+        setCheckoutError(
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : t("scoreboard.premiumErrorGeneric"),
+        );
+      } finally {
+        setCheckoutLoading(null);
+      }
+    },
+    [language, riddle?.id, t],
+  );
+
   const handleSubmitAnswer = useCallback(async () => {
     if (!riddle || !userAnswer.trim() || submittingAnswer || scoreResult) return;
 
@@ -560,7 +650,12 @@ export function RiddleClient() {
       const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
       const enhancedResult: ScoreResult = {
         ...result,
-        hints: result.hints && result.hints.length > 0 ? result.hints : usedHints,
+        hints:
+          result.hints && result.hints.length > 0
+            ? result.hints
+            : result.locked
+              ? []
+              : usedHints,
         riddleTitle: result.riddleTitle ?? riddle.title ?? null,
       };
       logRiddleClient("Submit succeeded", {
@@ -569,6 +664,8 @@ export function RiddleClient() {
         rankingPercent: enhancedResult.rankingPercent,
       });
       setScoreResult(enhancedResult);
+      setCheckoutError(null);
+      setCheckoutLoading(null);
       pause();
       setShowScoreboard(true);
     } catch (err) {
@@ -621,6 +718,13 @@ export function RiddleClient() {
           officialAnswer: data.officialAnswer ?? scoreResult?.officialAnswer ?? null,
           question: data.question ?? scoreResult?.question ?? null,
           riddleTitle: data.riddleTitle ?? scoreResult?.riddleTitle ?? null,
+          feedback: data.feedback ?? scoreResult?.feedback ?? null,
+          feedbackShort: data.feedbackShort ?? scoreResult?.feedbackShort ?? null,
+          locked: data.locked ?? scoreResult?.locked ?? false,
+          premiumAccess: data.premiumAccess ?? scoreResult?.premiumAccess ?? null,
+          unlockOptions: data.unlockOptions ?? scoreResult?.unlockOptions ?? null,
+          socialLinks: data.socialLinks ?? scoreResult?.socialLinks ?? null,
+          lockReason: data.lockReason ?? scoreResult?.lockReason ?? null,
         });
         logRiddleClient("Scoreboard fetched", {
           riddleId: riddle.id,
@@ -628,6 +732,8 @@ export function RiddleClient() {
           rankingPercent: merged.rankingPercent,
         });
         setScoreResult(merged);
+        setCheckoutError(null);
+        setCheckoutLoading(null);
         setShowScoreboard(true);
       } else {
         logRiddleClient("Scoreboard has no score", { riddleId: riddle.id });
@@ -687,6 +793,28 @@ export function RiddleClient() {
   const renderScoreboard = () => {
     const hasScore = Boolean(scoreResult);
     const normalizedScore = Math.round(scoreResult?.score ?? 0);
+    const isLocked = Boolean(scoreResult?.locked);
+    const premiumAccess = scoreResult?.premiumAccess ?? null;
+    const unlockOptions = scoreResult?.unlockOptions ?? null;
+    const displayedFeedback =
+      scoreResult?.feedback ?? scoreResult?.feedbackShort ?? t("scoreboard.fallbackFeedback");
+    const singlePrice = unlockOptions?.single
+      ? priceFormatter.format(unlockOptions.single.amountCents / 100)
+      : priceFormatter.format(1);
+    const subscriptionPrice = unlockOptions?.subscription
+      ? priceFormatter.format(unlockOptions.subscription.amountCents / 100)
+      : priceFormatter.format(9.9);
+    const subscriptionValidUntil =
+      premiumAccess?.validUntil && premiumAccess.validUntil.length > 0
+        ? getDateFormatter(language).format(new Date(premiumAccess.validUntil))
+        : null;
+    const social = scoreResult?.socialLinks ?? SOCIAL_LINKS;
+    const instagramUrl = social.instagramUrl;
+    const linkedinUrl = social.linkedinUrl;
+    const instagramHandle = social.instagramHandle;
+    const resourcePrice = priceFormatter.format(15);
+    const singleLoading = checkoutLoading === "single";
+    const subscriptionLoading = checkoutLoading === "subscription";
     return (
       <div className="relative min-h-screen pb-24 text-white">
         <TopBar />
@@ -745,9 +873,21 @@ export function RiddleClient() {
                 <div className="space-y-3">
                   <p className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">{t("scoreboard.scoreLabel")}</p>
                   <p className="text-5xl font-semibold text-white">{normalizedScore} / 100</p>
-                  <p className="whitespace-pre-line text-base text-white/80">
-                    {scoreResult?.feedback ?? t("scoreboard.fallbackFeedback")}
-                  </p>
+                  <p className="whitespace-pre-line text-base text-white/80">{displayedFeedback}</p>
+                  {!isLocked && premiumAccess?.type && (
+                    <p className="rounded-2xl border border-emerald-200/40 bg-emerald-400/10 px-4 py-2 text-xs text-emerald-100">
+                      {premiumAccess.type === "subscription"
+                        ? subscriptionValidUntil
+                          ? t("scoreboard.premiumActiveSubscription", { date: subscriptionValidUntil })
+                          : t("scoreboard.premiumActiveSubscriptionNoDate")
+                        : t("scoreboard.premiumActiveSingle")}
+                    </p>
+                  )}
+                  {isLocked && scoreResult?.lockReason && (
+                    <p className="rounded-2xl border border-amber-200/40 bg-amber-300/10 px-4 py-2 text-xs text-amber-100">
+                      {scoreResult.lockReason}
+                    </p>
+                  )}
                 </div>
 
                 {!scoreResult?.correct && scoreResult?.judgeMissingElements && scoreResult.judgeMissingElements.length > 0 && (
@@ -796,17 +936,96 @@ export function RiddleClient() {
                   </div>
                 </div>
 
-                {scoreResult?.hints && scoreResult.hints.length > 0 && (
-                  <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-5">
-                    <p className="muted-label text-white/60">{t("scoreboard.hintListTitle")}</p>
-                    <ul className="mt-3 space-y-2 text-sm text-white/75">
-                      {scoreResult.hints.map((hint, index) => (
-                        <li key={`score-hint-${index}`} className="rounded-xl bg-white/10 px-4 py-3 shadow-inner">
-                          <span className="font-semibold text-white/80">{language === "fr" ? `Indice ${index + 1} :` : `Hint ${index + 1}:`}</span> {hint}
-                        </li>
-                      ))}
-                    </ul>
+                {isLocked ? (
+                  <div className="rounded-2xl border border-amber-200/40 bg-amber-300/10 p-6 text-left text-white">
+                    <p className="text-sm font-semibold text-white">{t("scoreboard.premiumTitle")}</p>
+                    <p className="mt-2 text-sm text-white/80">{t("scoreboard.premiumSubtitle")}</p>
+                    <div className="mt-5 flex flex-col gap-3 lg:flex-row">
+                      <button
+                        type="button"
+                        className="rounded-full bg-white px-6 py-2 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:bg-white/60"
+                        onClick={() => handleCheckout("single")}
+                        disabled={singleLoading || subscriptionLoading}
+                      >
+                        {singleLoading
+                          ? t("scoreboard.premiumProcessing")
+                          : t("scoreboard.premiumUnlockSingle", { price: singlePrice })}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-white/30 px-6 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => handleCheckout("subscription")}
+                        disabled={singleLoading || subscriptionLoading}
+                      >
+                        {subscriptionLoading
+                          ? t("scoreboard.premiumProcessing")
+                          : t("scoreboard.premiumUnlockSubscription", { price: subscriptionPrice })}
+                      </button>
+                    </div>
+                    {checkoutError && (
+                      <p className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                        {checkoutError}
+                      </p>
+                    )}
+                    <p className="mt-5 text-xs text-white/70">
+                      {t("scoreboard.premiumResourcesLead", { price: resourcePrice })}{" "}
+                      <Link href="/resources" className="font-semibold text-amber-200 hover:text-white">
+                        {t("scoreboard.premiumResourcesCta")}
+                      </Link>
+                    </p>
                   </div>
+                ) : (
+                  <div className="rounded-2xl border border-emerald-200/30 bg-emerald-400/10 px-5 py-4 text-left text-sm text-emerald-100">
+                    {premiumAccess?.type === "subscription"
+                      ? subscriptionValidUntil
+                        ? t("scoreboard.premiumActiveSubscription", { date: subscriptionValidUntil })
+                        : t("scoreboard.premiumActiveSubscriptionNoDate")
+                      : t("scoreboard.premiumActiveSingle")}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/70">
+                  <p className="font-semibold uppercase tracking-[0.2em] text-white/60">
+                    {t("scoreboard.socialTitle")}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <a
+                      href={instagramUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-2 text-white/80 transition hover:text-white"
+                    >
+                      {t("scoreboard.socialInstagram", { handle: instagramHandle })}
+                    </a>
+                    <a
+                      href={linkedinUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-2 text-white/80 transition hover:text-white"
+                    >
+                      {t("scoreboard.socialLinkedIn")}
+                    </a>
+                  </div>
+                </div>
+
+                {isLocked ? (
+                  <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-5 text-sm text-white/70">
+                    {t("scoreboard.premiumLockedHints")}
+                  </div>
+                ) : (
+                  scoreResult?.hints &&
+                  scoreResult.hints.length > 0 && (
+                    <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-5">
+                      <p className="muted-label text-white/60">{t("scoreboard.hintListTitle")}</p>
+                      <ul className="mt-3 space-y-2 text-sm text-white/75">
+                        {scoreResult.hints.map((hint, index) => (
+                          <li key={`score-hint-${index}`} className="rounded-xl bg-white/10 px-4 py-3 shadow-inner">
+                            <span className="font-semibold text-white/80">{language === "fr" ? `Indice ${index + 1} :` : `Hint ${index + 1}:`}</span> {hint}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
                 )}
 
                 {scoreboardError && (
@@ -819,28 +1038,40 @@ export function RiddleClient() {
               <div className="glass-panel w-full space-y-8 p-10 text-left text-white/80">
                 <section className="space-y-3">
                   <p className="muted-label">{t("scoreboard.questionTitle")}</p>
-                  <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {scoreResult?.question?.trim()?.length
-                        ? scoreResult.question
-                        : language === "fr"
-                          ? "L'énoncé détaillé sera bientôt disponible."
-                          : "The full question will be available soon."}
-                    </ReactMarkdown>
-                  </div>
+                  {isLocked ? (
+                    <p className="rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70">
+                      {t("scoreboard.premiumLockedQuestion")}
+                    </p>
+                  ) : (
+                    <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {scoreResult?.question?.trim()?.length
+                          ? scoreResult.question
+                          : language === "fr"
+                            ? "L'énoncé détaillé sera bientôt disponible."
+                            : "The full question will be available soon."}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </section>
 
                 <section className="space-y-3">
                   <p className="muted-label">{t("scoreboard.solutionTitle")}</p>
-                  <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {scoreResult?.officialAnswer?.trim()?.length
-                        ? scoreResult.officialAnswer
-                        : language === "fr"
-                          ? "La solution détaillée arrive bientôt."
-                          : "The detailed solution will appear soon."}
-                    </ReactMarkdown>
-                  </div>
+                  {isLocked ? (
+                    <p className="rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70">
+                      {t("scoreboard.premiumLockedSolution")}
+                    </p>
+                  ) : (
+                    <div className="prose prose-invert max-w-none text-sm leading-relaxed text-white/80">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {scoreResult?.officialAnswer?.trim()?.length
+                          ? scoreResult.officialAnswer
+                          : language === "fr"
+                            ? "La solution détaillée arrive bientôt."
+                            : "The detailed solution will appear soon."}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </section>
               </div>
 

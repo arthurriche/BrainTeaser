@@ -4,6 +4,9 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ensureDailyJudgeCalibration, evaluateAnswerWithJudge, getJudgeOpenAIClient } from "@/lib/judge";
+import { PREMIUM_PRICES, SOCIAL_LINKS } from "@/lib/premium";
+import { evaluatePremiumAccess } from "@/lib/server/premium-access";
+import { formatScoreSummary } from "@/lib/scoreSummary";
 import { translateRiddleContent } from "@/lib/translation";
 
 const DEFAULT_DURATION = 45 * 60;
@@ -205,7 +208,7 @@ export async function POST(request: Request) {
       hint3: translated.hints?.hint3 ?? displayHintsMap.hint3,
     };
 
-    const displayHints = [displayHintsMap.hint1, displayHintsMap.hint2, displayHintsMap.hint3].filter(
+    let displayHints = [displayHintsMap.hint1, displayHintsMap.hint2, displayHintsMap.hint3].filter(
       (hint): hint is string => Boolean(hint),
     );
 
@@ -310,19 +313,61 @@ export async function POST(request: Request) {
       rankingPercent,
     });
 
+    let premiumAccess = {
+      unlocked: false,
+      type: null as "single" | "subscription" | null,
+      validUntil: null as string | null,
+    };
+    try {
+      premiumAccess = await evaluatePremiumAccess(supabase, session.user.id, riddleId);
+    } catch (premiumError) {
+      console.error("[Submit] Failed to evaluate premium access", premiumError);
+    }
+
     const openaiClient = getJudgeOpenAIClient();
     const baseReasoning = judgeEvaluation?.reasoning?.trim();
-    const missingElements = judgeEvaluation?.missingElements ?? [];
+    let missingElements = judgeEvaluation?.missingElements ?? [];
 
     const successPrefix = language === "fr" ? "Bravo !" : "Well done!";
-    let feedback = correct
+    const summary = formatScoreSummary({
+      language,
+      score,
+      rankingPercent,
+      timeSpent,
+      hintsUsed,
+    });
+
+    let detailedFeedback = correct
       ? baseReasoning
         ? `${successPrefix} ${baseReasoning}`
         : messages.correctFallback
-      : `${baseReasoning ?? messages.incorrectBase}${missingElements.length ? `\n\n${messages.missingLabel} : ${missingElements.join(' · ')}.` : ""}`;
+      : `${baseReasoning ?? messages.incorrectBase}${
+          missingElements.length ? `\n\n${messages.missingLabel} : ${missingElements.join(" · ")}.` : ""
+        }`;
 
     if (!correct) {
-      feedback = await suggestWithLLM(openaiClient, riddle.question ?? '', answer, hints, feedback, language);
+      detailedFeedback = await suggestWithLLM(
+        openaiClient,
+        riddle.question ?? "",
+        answer,
+        hints,
+        detailedFeedback,
+        language,
+      );
+    }
+
+    const premiumLockedMessage =
+      language === "fr"
+        ? "Débloque le débrief complet pour accéder à l'analyse détaillée."
+        : "Unlock premium to access the full breakdown.";
+
+    const feedback = premiumAccess.unlocked
+      ? `${summary}\n\n${detailedFeedback}`.trim()
+      : `${summary} ${premiumLockedMessage}`.trim();
+
+    if (!premiumAccess.unlocked) {
+      missingElements = [];
+      displayHints = [];
     }
 
     const payload = {
@@ -337,11 +382,25 @@ export async function POST(request: Request) {
       beatenPlayers,
       totalPlayers,
       judgeConfidence: judgeEvaluation?.confidence ?? null,
-      judgeMissingElements: missingElements,
-      officialAnswer: displaySolution,
-      question: displayQuestion,
+      judgeMissingElements: premiumAccess.unlocked ? missingElements : [],
+      officialAnswer: premiumAccess.unlocked ? displaySolution : null,
+      question: premiumAccess.unlocked ? displayQuestion : null,
       riddleTitle: displayTitle,
-      hints: displayHints,
+      hints: premiumAccess.unlocked ? displayHints : [],
+      locked: !premiumAccess.unlocked,
+      premiumAccess,
+      unlockOptions: {
+        single: {
+          amountCents: PREMIUM_PRICES.single.amountCents,
+          currency: PREMIUM_PRICES.single.currency,
+        },
+        subscription: {
+          amountCents: PREMIUM_PRICES.subscription.amountCents,
+          currency: PREMIUM_PRICES.subscription.currency,
+        },
+      },
+      socialLinks: SOCIAL_LINKS,
+      feedbackShort: summary,
     };
     console.log("[Submit] Returning response", {
       riddleId,
