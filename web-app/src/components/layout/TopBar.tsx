@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { useTranslations } from "@/components/providers/LanguageProvider";
 import { useSupabase } from "@/components/providers/SupabaseProvider";
 
@@ -44,7 +43,6 @@ export function TopBar() {
         >
           {t("nav.resources")}
         </Link>
-        <LanguageToggle />
         {session && (
           <button
             type="button"

@@ -13,19 +13,41 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
 import { SOCIAL_LINKS } from "@/lib/premium";
-import type {
-  Stripe,
-  StripeConstructor,
-  StripePaymentRequest,
-  StripePaymentRequestPaymentMethodEvent,
-} from "../../../types/stripe";
 
-const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-
-const getStripeConstructor = (): StripeConstructor | undefined => {
-  if (typeof window === "undefined") return undefined;
-  return (window as unknown as { Stripe?: StripeConstructor }).Stripe;
+const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
+const getStripeConstructor = (): typeof window.Stripe | null => {
+  if (typeof window === "undefined") return null;
+  return typeof window.Stripe === "function" ? window.Stripe : null;
 };
+
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Failed to read blob"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read blob"));
+    reader.readAsDataURL(blob);
+  });
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Failed to read file"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+
 
 interface RiddlePayload {
   id: number;
@@ -80,13 +102,20 @@ interface ScoreResult {
   socialLinks?: SocialLinks | null;
   feedbackShort?: string | null;
   lockReason?: string | null;
+  voiceTranscription?: string | null;
+  photoTranscription?: string | null;
+  attachments?: {
+    audio: boolean;
+    photo: boolean;
+  } | null;
+  autoSubmitted?: boolean;
 }
 
-const DIFFICULTY_MAP: Record<number, { en: string; fr: string }> = {
-  1: { en: "Novice", fr: "Novice" },
-  2: { en: "Skilled", fr: "Confirmé" },
-  3: { en: "Expert", fr: "Expert" },
-  4: { en: "Grandmaster", fr: "Grand Maître" },
+const DIFFICULTY_LABELS: Record<number, string> = {
+  1: "Novice",
+  2: "Skilled",
+  3: "Expert",
+  4: "Grandmaster",
 };
 
 const DEFAULT_DURATION = 45 * 60;
@@ -135,6 +164,10 @@ const mergeScoreData = (
   feedbackShort:
     overrides.feedbackShort !== undefined ? overrides.feedbackShort : base?.feedbackShort ?? null,
   lockReason: overrides.lockReason ?? base?.lockReason ?? null,
+  voiceTranscription: overrides.voiceTranscription ?? base?.voiceTranscription ?? null,
+  photoTranscription: overrides.photoTranscription ?? base?.photoTranscription ?? null,
+  attachments: overrides.attachments ?? base?.attachments ?? null,
+  autoSubmitted: overrides.autoSubmitted ?? base?.autoSubmitted ?? false,
 });
 
 const useViewportSize = () => {
@@ -148,8 +181,8 @@ const useViewportSize = () => {
   return size;
 };
 
-const getDateFormatter = (language: string) =>
-  new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+const getDateFormatter = () =>
+  new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -163,7 +196,7 @@ const DEFAULT_DONATION_CENTS = 30;
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 
-const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en" | "fr" }) => {
+const SupportApplePaySection = ({ t }: { t: TranslateFn }) => {
   const [amountCents, setAmountCents] = useState(DEFAULT_DONATION_CENTS);
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -174,12 +207,12 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
 
   const formattedAmount = useMemo(
     () =>
-      new Intl.NumberFormat(language === "fr" ? "fr-FR" : "en-US", {
+      new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 2,
       }).format(amountCents / 100),
-    [amountCents, language],
+    [amountCents],
   );
 
   const supportTitle = t("scoreboard.supportTitle");
@@ -311,7 +344,7 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
           body: JSON.stringify({
             amountCents: Math.min(Math.max(amountCents, MIN_DONATION_CENTS), MAX_DONATION_CENTS),
             paymentMethodId: event.paymentMethod.id,
-            locale: language,
+            locale: "en",
           }),
         });
         const payload = (await response.json()) as {
@@ -353,7 +386,7 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
     return () => {
       paymentRequest.off("paymentmethod", handlePaymentMethod);
     };
-  }, [paymentRequest, stripe, amountCents, genericError, language]);
+  }, [paymentRequest, stripe, amountCents, genericError]);
 
   useEffect(() => {
     if (!stripe || !paymentRequest || !buttonContainerRef.current || !canUseApplePay) return;
@@ -467,7 +500,7 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
 };
 
 export function RiddleClient() {
-  const { t, language } = useTranslations();
+  const { t } = useTranslations();
   const [riddle, setRiddle] = useState<RiddlePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -481,6 +514,151 @@ export function RiddleClient() {
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<"single" | "subscription" | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [audioState, setAudioState] = useState<"idle" | "recording" | "processing" | "review">("idle");
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [audioDataUrl, setAudioDataUrl] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const autoSubmitRef = useRef(false);
+  const pendingAutoSubmitRef = useRef(false);
+
+  const clearAudioResources = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+    }
+    mediaRecorderRef.current = null;
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    mediaStreamRef.current = null;
+    audioChunksRef.current = [];
+  }, []);
+
+  const clearAudioRecording = useCallback(() => {
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl);
+    }
+    setAudioPreviewUrl(null);
+    setAudioDataUrl(null);
+    setAudioError(null);
+    setAudioState("idle");
+  }, [audioPreviewUrl]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    if (audioState === "recording") {
+      stopRecording();
+      return;
+    }
+    if (audioState === "processing") return;
+    if (audioState === "review" || audioState === "idle") {
+      clearAudioRecording();
+    }
+    setAudioError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.onerror = (event) => {
+        console.error("[Audio] Recorder error", event);
+        setAudioError("Recording failed. Please try again.");
+        clearAudioResources();
+        setAudioState("idle");
+      };
+      recorder.onstop = async () => {
+        setAudioState("processing");
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const [dataUrl, objectUrl] = await Promise.all([blobToDataUrl(blob), Promise.resolve(URL.createObjectURL(blob))]);
+          setAudioDataUrl(dataUrl);
+          if (audioPreviewUrl) {
+            URL.revokeObjectURL(audioPreviewUrl);
+          }
+          setAudioPreviewUrl(objectUrl);
+          setAudioState("review");
+        } catch (error) {
+          console.error("[Audio] Failed to process recording", error);
+          setAudioError("Unable to process the recording. Please try again.");
+          setAudioDataUrl(null);
+          setAudioPreviewUrl(null);
+          setAudioState("idle");
+        } finally {
+          clearAudioResources();
+        }
+      };
+      recorder.start();
+      setAudioState("recording");
+    } catch (error) {
+      console.error("[Audio] Failed to access microphone", error);
+      setAudioError("Microphone access denied. Please allow access and try again.");
+      clearAudioResources();
+      setAudioState("idle");
+    }
+  }, [audioPreviewUrl, audioState, clearAudioRecording, clearAudioResources, stopRecording]);
+
+  const handlePhotoUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhotoError(null);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+      const objectUrl = URL.createObjectURL(file);
+      setPhotoPreviewUrl(objectUrl);
+      setPhotoDataUrl(dataUrl);
+    } catch (error) {
+      console.error("[Photo] Failed to read file", error);
+      setPhotoError("Unable to read that image. Please try another photo.");
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+      setPhotoPreviewUrl(null);
+      setPhotoDataUrl(null);
+    }
+  }, [photoPreviewUrl]);
+
+  const clearPhoto = useCallback(() => {
+    if (photoPreviewUrl) {
+      URL.revokeObjectURL(photoPreviewUrl);
+    }
+    setPhotoPreviewUrl(null);
+    setPhotoDataUrl(null);
+    setPhotoError(null);
+  }, [photoPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      clearAudioResources();
+      if (audioPreviewUrl) {
+        URL.revokeObjectURL(audioPreviewUrl);
+      }
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [audioPreviewUrl, photoPreviewUrl, clearAudioResources]);
 
   const viewport = useViewportSize();
 
@@ -489,12 +667,12 @@ export function RiddleClient() {
 
   const priceFormatter = useMemo(
     () =>
-      new Intl.NumberFormat(language === "fr" ? "fr-FR" : "en-US", {
+      new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 2,
       }),
-    [language],
+    [],
   );
 
   const loadRiddle = useCallback(async () => {
@@ -503,7 +681,7 @@ export function RiddleClient() {
     reset();
     try {
       logRiddleClient("Loading daily riddle");
-      const response = await fetch(`/api/riddle-today?lang=${language}`, { cache: "no-store" });
+      const response = await fetch(`/api/riddle-today?lang=en`, { cache: "no-store" });
       if (!response.ok) {
         const body = await response.text();
         logRiddleClient("Failed to load riddle", { status: response.status, body });
@@ -524,6 +702,8 @@ export function RiddleClient() {
       setScoreResult(null);
       setShowScoreboard(false);
       setScoreboardError(null);
+      clearAudioRecording();
+      clearPhoto();
       start(payload.duration ?? DEFAULT_DURATION);
     } catch (err) {
       logRiddleClient("Error while loading riddle", err);
@@ -531,25 +711,23 @@ export function RiddleClient() {
     } finally {
       setLoading(false);
     }
-  }, [start, reset, language]);
+  }, [start, reset, clearAudioRecording, clearPhoto]);
 
   useEffect(() => {
     void loadRiddle();
   }, [loadRiddle]);
 
   const difficultyLabel = useMemo(() => {
-    if (!riddle?.difficulty) return language === "fr" ? "À confirmer" : "To confirm";
-    const entry = DIFFICULTY_MAP[riddle.difficulty];
-    if (!entry) return language === "fr" ? "À confirmer" : "To confirm";
-    return entry[language];
-  }, [riddle?.difficulty, language]);
+    if (!riddle?.difficulty) return "To confirm";
+    return DIFFICULTY_LABELS[riddle.difficulty] ?? "To confirm";
+  }, [riddle?.difficulty]);
 
   const releaseDateLabel = useMemo(() => {
     if (!riddle?.releaseDate) return null;
     const date = new Date(riddle.releaseDate);
     if (Number.isNaN(date.getTime())) return null;
-    return getDateFormatter(language).format(date);
-  }, [riddle?.releaseDate, language]);
+    return getDateFormatter().format(date);
+  }, [riddle?.releaseDate]);
 
   const hints = useMemo(() => {
     if (!riddle) return [] as string[];
@@ -581,8 +759,8 @@ export function RiddleClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             plan === "single"
-              ? { kind: "single_riddle", riddleId: riddle?.id, locale: language }
-              : { kind: "subscription", locale: language },
+              ? { kind: "single_riddle", riddleId: riddle?.id, locale: "en" }
+              : { kind: "subscription", locale: "en" },
           ),
         });
 
@@ -608,93 +786,123 @@ export function RiddleClient() {
         setCheckoutLoading(null);
       }
     },
-    [language, riddle?.id, t],
+    [riddle?.id, t],
   );
 
-  const handleSubmitAnswer = useCallback(async () => {
-    if (!riddle || !userAnswer.trim() || submittingAnswer || scoreResult) return;
+  const handleSubmitAnswer = useCallback(
+    async (options?: { allowEmpty?: boolean; auto?: boolean }) => {
+      if (!riddle || submittingAnswer || scoreResult) return;
 
-    setSubmittingAnswer(true);
-    setShowScoreboard(false);
-    setScoreboardError(null);
-    pause();
+      const trimmedAnswer = userAnswer.trim();
+      const hasText = trimmedAnswer.length > 0;
+      const hasAudio = Boolean(audioDataUrl);
+      const hasPhoto = Boolean(photoDataUrl);
 
-    try {
-      logRiddleClient("Submitting answer", {
-        riddleId: riddle.id,
-        answerLength: userAnswer.length,
-        totalDuration: countdownState.totalDuration,
-        timeRemaining: countdownState.timeRemaining,
-        hintsUsed: revealedHints.length,
-        language,
-      });
-      const response = await fetch("/api/riddle-submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      if (!options?.allowEmpty && !hasText && !hasAudio && !hasPhoto) return;
+
+      setSubmittingAnswer(true);
+      setShowScoreboard(false);
+      setScoreboardError(null);
+      pause();
+
+      try {
+        logRiddleClient("Submitting answer", {
           riddleId: riddle.id,
-          answer: userAnswer,
+          answerLength: userAnswer.length,
           totalDuration: countdownState.totalDuration,
           timeRemaining: countdownState.timeRemaining,
           hintsUsed: revealedHints.length,
-          userMessages: 1,
-          hints: revealedHints.map((index) => hints[index]).filter(Boolean),
-          language,
-        }),
-      });
+          hasAudio,
+          hasPhoto,
+          autoSubmitted: options?.auto ?? false,
+        });
+        const response = await fetch("/api/riddle-submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            riddleId: riddle.id,
+            answer: userAnswer,
+            totalDuration: countdownState.totalDuration,
+            timeRemaining: countdownState.timeRemaining,
+            hintsUsed: revealedHints.length,
+            userMessages: 1,
+            hints: revealedHints.map((index) => hints[index]).filter(Boolean),
+            attachments: {
+              audio: audioDataUrl,
+              photo: photoDataUrl,
+            },
+            autoSubmitted: options?.auto ?? false,
+          }),
+        });
 
-      if (!response.ok) {
-        const body = await response.text();
-        logRiddleClient("Submit failed", { status: response.status, body });
-        throw new Error(body || t("scoreboardErrors.generic"));
-      }
+        if (!response.ok) {
+          const body = await response.text();
+          logRiddleClient("Submit failed", { status: response.status, body });
+          throw new Error(body || t("scoreboardErrors.generic"));
+        }
 
-      const data = await response.json();
-      if (data?.requiresAuth) {
-        logRiddleClient("Submit requires auth", { riddleId: riddle.id });
-        setScoreResult(null);
-        setScoreboardError(data.error ?? t("scoreboardErrors.auth"));
+        const data = await response.json();
+        if (data?.requiresAuth) {
+          logRiddleClient("Submit requires auth", { riddleId: riddle.id });
+          setScoreResult(null);
+          setScoreboardError(data.error ?? t("scoreboardErrors.auth"));
+          setShowScoreboard(true);
+          setSubmittingAnswer(false);
+          return;
+        }
+        const result = data as ScoreResult;
+        const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
+        const enhancedResult: ScoreResult = {
+          ...result,
+          hints:
+            result.hints && result.hints.length > 0
+              ? result.hints
+              : result.locked
+                ? []
+                : usedHints,
+          riddleTitle: result.riddleTitle ?? riddle.title ?? null,
+        };
+        logRiddleClient("Submit succeeded", {
+          riddleId: riddle.id,
+          score: enhancedResult.score,
+          rankingPercent: enhancedResult.rankingPercent,
+          autoSubmitted: options?.auto ?? false,
+        });
+        setScoreResult(enhancedResult);
+        setCheckoutError(null);
+        setCheckoutLoading(null);
+        pause();
         setShowScoreboard(true);
+      } catch (err) {
+        logRiddleClient("Submit threw", err);
+        setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
+      } finally {
         setSubmittingAnswer(false);
-        return;
       }
-      const result = data as ScoreResult;
-      const usedHints = revealedHints.map((index) => hints[index]).filter((hint): hint is string => Boolean(hint));
-      const enhancedResult: ScoreResult = {
-        ...result,
-        hints:
-          result.hints && result.hints.length > 0
-            ? result.hints
-            : result.locked
-              ? []
-              : usedHints,
-        riddleTitle: result.riddleTitle ?? riddle.title ?? null,
-      };
-      logRiddleClient("Submit succeeded", {
-        riddleId: riddle.id,
-        score: enhancedResult.score,
-        rankingPercent: enhancedResult.rankingPercent,
-      });
-      setScoreResult(enhancedResult);
-      setCheckoutError(null);
-      setCheckoutLoading(null);
-      pause();
-      setShowScoreboard(true);
-    } catch (err) {
-      logRiddleClient("Submit threw", err);
-      setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
-    } finally {
-      setSubmittingAnswer(false);
-    }
-  }, [riddle, userAnswer, submittingAnswer, scoreResult, countdownState.totalDuration, countdownState.timeRemaining, revealedHints, hints, pause, language, t]);
+    },
+    [
+      riddle,
+      submittingAnswer,
+      scoreResult,
+      userAnswer,
+      audioDataUrl,
+      photoDataUrl,
+      countdownState.totalDuration,
+      countdownState.timeRemaining,
+      revealedHints,
+      hints,
+      pause,
+      t,
+    ],
+  );
 
   const fetchScoreboard = useCallback(async () => {
     if (!riddle) return;
-    logRiddleClient("Fetching scoreboard", { riddleId: riddle.id, language });
+    logRiddleClient("Fetching scoreboard", { riddleId: riddle.id });
     setScoreboardError(null);
     try {
-      const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}&lang=${language}`, { cache: "no-store", credentials: "include" });
+      const response = await fetch(`/api/riddle-scoreboard?riddleId=${riddle.id}&lang=en`, { cache: "no-store", credentials: "include" });
       if (response.status === 401) {
         logRiddleClient("Scoreboard 401", { riddleId: riddle.id });
         setScoreboardError(t("scoreboardErrors.auth"));
@@ -758,15 +966,42 @@ export function RiddleClient() {
       setScoreboardError(err instanceof Error ? err.message : t("scoreboardErrors.generic"));
       setShowScoreboard(true);
     }
-  }, [riddle, scoreResult, hints, revealedHints, t, language]);
+  }, [riddle, scoreResult, hints, revealedHints, t]);
 
   useEffect(() => {
-    if (!showScoreboard && countdownState.timeRemaining === 0) {
-      logRiddleClient("Timer reached zero, requesting scoreboard");
-      void fetchScoreboard();
-      pause();
+    if (countdownState.timeRemaining === 0) {
+      if (!scoreResult && !submittingAnswer && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+        if (audioState === "recording" || audioState === "processing") {
+          pendingAutoSubmitRef.current = true;
+          if (audioState === "recording") {
+            stopRecording();
+          }
+        } else {
+          logRiddleClient("Timer reached zero, auto-submitting answer");
+          void handleSubmitAnswer({ allowEmpty: true, auto: true });
+        }
+      }
+    } else {
+      autoSubmitRef.current = false;
+      pendingAutoSubmitRef.current = false;
     }
-  }, [countdownState.timeRemaining, fetchScoreboard, showScoreboard, pause]);
+  }, [audioState, countdownState.timeRemaining, handleSubmitAnswer, scoreResult, stopRecording, submittingAnswer]);
+
+  useEffect(() => {
+    if (
+      autoSubmitRef.current &&
+      pendingAutoSubmitRef.current &&
+      audioState !== "recording" &&
+      audioState !== "processing" &&
+      !submittingAnswer &&
+      !scoreResult
+    ) {
+      pendingAutoSubmitRef.current = false;
+      logRiddleClient("Recording processed after timeout, completing auto submission");
+      void handleSubmitAnswer({ allowEmpty: true, auto: true });
+    }
+  }, [audioState, handleSubmitAnswer, scoreResult, submittingAnswer]);
 
   const scoreboardShouldDisplay = showScoreboard || Boolean(scoreResult);
 
@@ -819,7 +1054,7 @@ export function RiddleClient() {
       : priceFormatter.format(9.9);
     const subscriptionValidUntil =
       premiumAccess?.validUntil && premiumAccess.validUntil.length > 0
-        ? getDateFormatter(language).format(new Date(premiumAccess.validUntil))
+        ? getDateFormatter().format(new Date(premiumAccess.validUntil))
         : null;
     const social = scoreResult?.socialLinks ?? SOCIAL_LINKS;
     const instagramUrl = social.instagramUrl;
@@ -887,6 +1122,9 @@ export function RiddleClient() {
                   <p className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">{t("scoreboard.scoreLabel")}</p>
                   <p className="text-5xl font-semibold text-white">{normalizedScore} / 100</p>
                   <p className="whitespace-pre-line text-base text-white/80">{displayedFeedback}</p>
+                  {scoreResult?.autoSubmitted && (
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/60">Submitted automatically at timeout</p>
+                  )}
                   {!isLocked && premiumAccess?.type && (
                     <p className="rounded-2xl border border-emerald-200/40 bg-emerald-400/10 px-4 py-2 text-xs text-emerald-100">
                       {premiumAccess.type === "subscription"
@@ -900,6 +1138,18 @@ export function RiddleClient() {
                     <p className="rounded-2xl border border-amber-200/40 bg-amber-300/10 px-4 py-2 text-xs text-amber-100">
                       {scoreResult.lockReason}
                     </p>
+                  )}
+                  {scoreResult?.voiceTranscription && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <p className="text-sm font-semibold text-white">Voice transcription</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-white/70">{scoreResult.voiceTranscription}</p>
+                    </div>
+                  )}
+                  {scoreResult?.photoTranscription && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <p className="text-sm font-semibold text-white">Handwritten notes</p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-white/70">{scoreResult.photoTranscription}</p>
+                    </div>
                   )}
                 </div>
 
@@ -1033,7 +1283,7 @@ export function RiddleClient() {
                       <ul className="mt-3 space-y-2 text-sm text-white/75">
                         {scoreResult.hints.map((hint, index) => (
                           <li key={`score-hint-${index}`} className="rounded-xl bg-white/10 px-4 py-3 shadow-inner">
-                            <span className="font-semibold text-white/80">{language === "fr" ? `Indice ${index + 1} :` : `Hint ${index + 1}:`}</span> {hint}
+                            <span className="font-semibold text-white/80">{`Hint ${index + 1}:`}</span> {hint}
                           </li>
                         ))}
                       </ul>
@@ -1060,9 +1310,7 @@ export function RiddleClient() {
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {scoreResult?.question?.trim()?.length
                           ? scoreResult.question
-                          : language === "fr"
-                            ? "L'énoncé détaillé sera bientôt disponible."
-                            : "The full question will be available soon."}
+                          : "The full question will be available soon."}
                       </ReactMarkdown>
                     </div>
                   )}
@@ -1079,9 +1327,7 @@ export function RiddleClient() {
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {scoreResult?.officialAnswer?.trim()?.length
                           ? scoreResult.officialAnswer
-                          : language === "fr"
-                            ? "La solution détaillée arrive bientôt."
-                            : "The detailed solution will appear soon."}
+                          : "The detailed solution will appear soon."}
                       </ReactMarkdown>
                     </div>
                   )}
@@ -1089,7 +1335,7 @@ export function RiddleClient() {
               </div>
 
               <div className="flex flex-col items-center gap-4 text-sm text-white/70">
-                <SupportApplePaySection t={t} language={language} />
+                <SupportApplePaySection t={t} />
                 <button
                   type="button"
                   className="hover-lift rounded-full border border-amber-200/40 px-5 py-2 font-medium text-white transition hover:bg-amber-300/10"
@@ -1112,7 +1358,7 @@ export function RiddleClient() {
         <header className="animate-section animate-delay-1 space-y-4 text-center lg:text-left">
           <span className="muted-label">{t("riddle.stageLabel")}</span>
           <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl">
-            {riddle?.title ?? (language === "fr" ? "Énigme mystère" : "Mystery riddle")}
+            {riddle?.title ?? "Mystery riddle"}
           </h1>
           <p className="text-base text-white/70">{t("riddle.heroTitle")}</p>
           <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-white/70 lg:justify-start">
@@ -1140,7 +1386,7 @@ export function RiddleClient() {
           </div>
         ) : (
           <div className="glass-panel animate-section animate-delay-2 flex h-80 items-center justify-center text-sm text-white/60">
-            {language === "fr" ? "Illustration en cours de préparation…" : "Illustration loading soon…"}
+            Illustration loading soon…
           </div>
         )}
 
@@ -1167,6 +1413,85 @@ export function RiddleClient() {
                 onChange={(event) => setUserAnswer(event.target.value)}
                 disabled={submittingAnswer || Boolean(scoreResult)}
               />
+              <p className="text-xs text-white/60">
+                You can reply in any language—just make sure your reasoning is explicit so every point can be awarded.
+              </p>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <header className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Voice response (optional)</p>
+                    <p className="text-xs text-white/60">
+                      Record your explanation instead of typing. We will transcribe and analyse it automatically.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      audioState === "recording"
+                        ? "bg-rose-500/90 text-white shadow-lg"
+                        : "border border-white/30 bg-white/10 text-white/80 hover:bg-white/20"
+                    }`}
+                    onClick={startRecording}
+                    disabled={submittingAnswer || Boolean(scoreResult)}
+                  >
+                    {audioState === "recording" ? "Stop recording" : audioState === "review" ? "Record again" : "Record audio"}
+                  </button>
+                </header>
+                <div className="space-y-2 text-xs text-white/70">
+                  {audioState === "recording" && <p className="animate-pulse text-rose-200">Recording… speak clearly.</p>}
+                  {audioState === "processing" && <p>Processing your clip…</p>}
+                  {audioState === "review" && audioPreviewUrl && (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/10 p-3">
+                      <audio controls src={audioPreviewUrl} className="w-full">
+                        <track kind="captions" />
+                      </audio>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-rose-200 hover:text-rose-100"
+                        onClick={clearAudioRecording}
+                        disabled={submittingAnswer || Boolean(scoreResult)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  {audioError && <p className="text-rose-200">{audioError}</p>}
+                </div>
+              </div>
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <header className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Photo evidence (optional)</p>
+                    <p className="text-xs text-white/60">Upload a snapshot of handwritten reasoning to be analysed.</p>
+                  </div>
+                  <label className="cursor-pointer rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/20">
+                    Upload photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={submittingAnswer || Boolean(scoreResult)}
+                    />
+                  </label>
+                </header>
+                {photoPreviewUrl && (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photoPreviewUrl} alt="Uploaded reasoning" className="max-h-48 w-full rounded-lg object-contain" />
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-semibold text-rose-200 hover:text-rose-100"
+                      onClick={clearPhoto}
+                      disabled={submittingAnswer || Boolean(scoreResult)}
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                )}
+                {photoError && <p className="text-xs text-rose-200">{photoError}</p>}
+              </div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
                 <span>{t("riddle.status.timeRemaining")}: {formatSeconds(countdownState.timeRemaining)}</span>
                 <span>{t("riddle.status.hintsUsed")}: {revealedHints.length}</span>

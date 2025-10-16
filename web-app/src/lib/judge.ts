@@ -116,8 +116,8 @@ const generateCalibration = async (
           role: "system",
           content:
             language === "fr"
-              ? "Tu es Le Maître, un arbitre impartial qui construit un guide d'évaluation pour juger les réponses aux énigmes. Réponds en français sous forme de JSON avec `instructions`, `key_points`, `acceptance_criteria` et `red_flags`."
-              : "You are the Master, an impartial judge building an evaluation guide for riddle answers. Respond in English as JSON with `instructions`, `key_points`, `acceptance_criteria`, and `red_flags`.",
+              ? "Tu es un évaluateur impartial qui construit un guide d'évaluation pour juger les réponses aux énigmes. Réponds en français sous forme de JSON avec `instructions`, `key_points`, `acceptance_criteria` et `red_flags`."
+              : "You are an impartial evaluator building an assessment guide for riddle answers. Respond in English as JSON with `instructions`, `key_points`, `acceptance_criteria`, and `red_flags`.",
         },
         {
           role: "user",
@@ -249,8 +249,8 @@ export const evaluateAnswerWithJudge = async (
           role: "system",
           content:
             language === "fr"
-              ? "Tu es Le Maître, un juge impartial. Analyse en français la proposition de l'élève en suivant le guide fourni. Retourne un JSON avec `is_correct`, `confidence`, `reasoning` et `missing_elements`."
-              : "You are the Master, an impartial judge. Analyse the student's attempt in English using the provided guide. Return JSON with `is_correct`, `confidence`, `reasoning`, and `missing_elements`.",
+              ? "Tu es un évaluateur impartial. Analyse en français la proposition de l'élève en suivant le guide fourni. Retourne un JSON avec `is_correct`, `confidence`, `reasoning` et `missing_elements`."
+              : "You are an impartial reviewer. Analyse the student's attempt in English using the provided guide. Return JSON with `is_correct`, `confidence`, `reasoning`, and `missing_elements`.",
         },
         {
           role: "user",

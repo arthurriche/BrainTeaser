@@ -23,18 +23,12 @@ const createClient = (): GenericSupabaseClient => createRouteHandlerClient({ coo
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const languageParam = searchParams.get("lang");
-  const language: "en" | "fr" = languageParam === "fr" ? "fr" : "en";
-  const messages = language === "fr"
-    ? {
-        invalidRiddle: "riddleId requis",
-        authRequired: "Connecte-toi pour accéder au classement.",
-        unexpected: "Erreur inattendue",
-      }
-    : {
-        invalidRiddle: "riddleId required",
-        authRequired: "Sign in to view the leaderboard.",
-        unexpected: "Unexpected error",
-      };
+  const language: "en" = "en";
+  const messages = {
+    invalidRiddle: "riddleId required",
+    authRequired: "Sign in to view the leaderboard.",
+    unexpected: "Unexpected error",
+  };
 
   const riddleId = Number.parseInt(searchParams.get("riddleId") ?? "", 10);
   if (Number.isNaN(riddleId) || riddleId <= 0) {
@@ -44,7 +38,8 @@ export async function GET(request: Request) {
 
   try {
     console.log("[Scoreboard] Incoming request", { riddleId, language });
-    const supabase = createClient();
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -186,15 +181,11 @@ export async function GET(request: Request) {
     });
 
     const summary = formatScoreSummary({
-      language,
       score: normalizedScore,
       rankingPercent,
       timeSpent: existingScore.duration ?? null,
     });
-    const lockedMessage =
-      language === "fr"
-        ? "Débloque le débrief complet pour accéder à l'analyse détaillée."
-        : "Unlock premium to access the full breakdown.";
+    const lockedMessage = "Unlock premium to access the full breakdown.";
 
     const unlockOptions = {
       single: {
@@ -235,9 +226,7 @@ export async function GET(request: Request) {
       locked: isLocked,
       lockReason: premiumAccess.unlocked
         ? null
-        : language === "fr"
-          ? "Abonne-toi ou débloque cette énigme pour voir les indices et la solution officielle."
-          : "Subscribe or unlock this puzzle to view the hints and official solution.",
+        : "Subscribe or unlock this puzzle to view the hints and official solution.",
     });
   } catch (error) {
     console.error("[Scoreboard] Failed to fetch data", { riddleId, lang: language }, error);

@@ -19,7 +19,8 @@ export const TimerPanel = ({ state, label, helper, statusLabels }: TimerPanelPro
   const { timeRemaining, totalDuration, isActive, isFinished } = state;
 
   const progress = totalDuration > 0 ? Math.max(timeRemaining / totalDuration, 0) : 1;
-  const lowTime = totalDuration > 0 && progress <= 0.1;
+  const blinking = !isFinished && timeRemaining <= 20;
+  const lowTime = blinking || (totalDuration > 0 && progress <= 0.1);
 
   const minutes = Math.floor(timeRemaining / 60)
     .toString()
@@ -42,7 +43,14 @@ export const TimerPanel = ({ state, label, helper, statusLabels }: TimerPanelPro
       <header className="relative z-10 flex items-center justify-between">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.5em] text-white/60">{label}</p>
-          <p className="text-5xl font-semibold tracking-tight">{minutes}:{seconds}</p>
+          <p
+            className={cn(
+              "text-5xl font-semibold tracking-tight transition-colors",
+              blinking ? "animate-pulse text-rose-200" : "text-white",
+            )}
+          >
+            {minutes}:{seconds}
+          </p>
         </div>
         <span
           className={cn(

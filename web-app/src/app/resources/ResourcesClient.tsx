@@ -19,7 +19,7 @@ const isResourceSlug = (value: string | null): value is ResourceSlug =>
   Boolean(value && Object.hasOwn(RESOURCE_CATALOG, value as ResourceSlug));
 
 export function ResourcesClient() {
-  const { t, language } = useTranslations();
+  const { t } = useTranslations();
   const searchParams = useSearchParams();
   const [ownedResources, setOwnedResources] = useState<OwnedResources>({});
   const [loadingSlug, setLoadingSlug] = useState<ResourceSlug | null>(null);
@@ -28,12 +28,12 @@ export function ResourcesClient() {
 
   const priceFormatter = useMemo(
     () =>
-      new Intl.NumberFormat(language === "fr" ? "fr-FR" : "en-US", {
+      new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "EUR",
         minimumFractionDigits: 2,
       }),
-    [language],
+    [],
   );
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function ResourcesClient() {
         const response = await fetch("/api/payments/create-checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "resource", resourceSlug: slug, locale: language }),
+          body: JSON.stringify({ kind: "resource", resourceSlug: slug, locale: "en" }),
         });
         const payload = (await response.json()) as { url?: string | null; error?: string };
         if (!response.ok || !payload?.url) {
@@ -101,7 +101,7 @@ export function ResourcesClient() {
         setLoadingSlug(null);
       }
     },
-    [language, ownedResources, t],
+    [ownedResources, t],
   );
 
   const highlightParam = searchParams.get("highlight");
@@ -113,7 +113,7 @@ export function ResourcesClient() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 pt-20">
         <header className="space-y-4 text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-100">
-            <Sparkles className="h-4 w-4" /> PDF Masterclass
+            <Sparkles className="h-4 w-4" /> PDF Strategy Pack
           </span>
           <h1 className="text-4xl font-semibold md:text-5xl">{t("resources.title")}</h1>
           <p className="mx-auto max-w-2xl text-sm text-white/70">{t("resources.subtitle")}</p>

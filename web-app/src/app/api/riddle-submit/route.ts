@@ -32,6 +32,71 @@ const normalizeAnswer = (value: string) =>
 type GenericSupabaseClient = SupabaseClient;
 
 const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+const AUDIO_TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL ?? "gpt-4o-mini-transcribe";
+const IMAGE_REASONING_MODEL = process.env.OPENAI_VISION_MODEL ?? openaiModel;
+
+const decodeDataUrl = (value: string): { mimeType: string; buffer: Buffer } | null => {
+  const match = value.match(/^data:(.+);base64,(.+)$/);
+  if (!match) return null;
+  const [, mimeType, base64] = match;
+  const buffer = Buffer.from(base64, "base64");
+  return { mimeType, buffer };
+};
+
+const transcribeAudioAttachment = async (dataUrl: string): Promise<string | null> => {
+  const decoded = decodeDataUrl(dataUrl);
+  if (!decoded) return null;
+  const openai = getJudgeOpenAIClient();
+  if (!openai) {
+    console.warn("[Submit] OpenAI client unavailable for audio transcription");
+    return null;
+  }
+  try {
+    const blob = new Blob([decoded.buffer], { type: decoded.mimeType });
+    const transcription = await openai.audio.transcriptions.create({
+      model: AUDIO_TRANSCRIPTION_MODEL,
+      file: blob,
+      filename: "voice-input",
+    });
+    return transcription.text?.trim() ?? null;
+  } catch (error) {
+    console.error("[Submit] Audio transcription failed", error);
+    return null;
+  }
+};
+
+const extractHandwrittenReasoning = async (dataUrl: string): Promise<string | null> => {
+  const openai = getJudgeOpenAIClient();
+  if (!openai) {
+    console.warn("[Submit] OpenAI client unavailable for vision extraction");
+    return null;
+  }
+  try {
+    const completion = await openai.chat.completions.create({
+      model: IMAGE_REASONING_MODEL,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You transcribe handwritten or photographed reasoning into clear, step-by-step English text suitable for evaluation.",
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Transcribe the reasoning from this photo into clear numbered steps in English." },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    });
+    const content = completion.choices[0]?.message?.content;
+    return typeof content === "string" ? content.trim() : Array.isArray(content) ? content.map((chunk) => (typeof chunk === "string" ? chunk : "")).join("").trim() : null;
+  } catch (error) {
+    console.error("[Submit] Vision transcription failed", error);
+    return null;
+  }
+};
 
 const suggestWithLLM = async (
   openai: ReturnType<typeof getJudgeOpenAIClient>,
@@ -50,19 +115,11 @@ const suggestWithLLM = async (
         {
           role: "system",
           content:
-            language === "fr"
-              ? "Tu es Le Maître. En une courte réponse, explique pourquoi la proposition ne suffit pas et suggère un angle à explorer sans dévoiler la solution. Réponds en français."
-              : "You are the Master. Briefly explain why the attempt is insufficient and suggest one avenue to explore without revealing the solution. Reply in English.",
+            "You are an impartial reviewer. Briefly explain why the attempt is insufficient and suggest one avenue to explore without revealing the solution. Reply in English.",
         },
         {
           role: "user",
-          content:
-            language === "fr"
-              ? `Énigme : ${question}
-Réponse proposée : ${answer}
-Indices disponibles : ${hints.length ? hints.join(' | ') : 'aucun'}
-Feedback actuel : ${feedback}`.trim()
-              : `Riddle: ${question}
+          content: `Riddle: ${question}
 Proposed answer: ${answer}
 Available hints: ${hints.length ? hints.join(' | ') : 'none'}
 Current feedback: ${feedback}`.trim(),
@@ -71,7 +128,7 @@ Current feedback: ${feedback}`.trim(),
     });
     const suggestion = completion.choices[0]?.message?.content?.trim();
     if (!suggestion) return feedback;
-    const prefix = language === "fr" ? "Le Maître te souffle : " : "The Master hints: ";
+    const prefix = "Coach suggests: ";
     return `${feedback}
 
 ${prefix}${suggestion}`;
@@ -82,8 +139,8 @@ ${prefix}${suggestion}`;
 };
 
 export async function POST(request: Request) {
-  let language: "en" | "fr" = "en";
-  let messages = {
+  const language: "en" = "en";
+  const messages = {
     invalidParams: "Invalid parameters",
     authRequired: "Sign in to record your attempt.",
     riddleNotFound: "Riddle not found",
@@ -93,59 +150,48 @@ export async function POST(request: Request) {
     correctFallback: "Well done! Your answer matches the official solution.",
     incorrectBase: "The proposed answer doesn't match.",
     missingLabel: "Sharpen these points",
-    whisperPrefix: "The Master hints:",
+    whisperPrefix: "Coach suggests:",
   };
 
   try {
     const body = await request.json();
     const riddleId = Number.parseInt(body?.riddleId ?? "", 10);
-    const answer = String(body?.answer ?? "").trim();
+    const rawAnswer = typeof body?.answer === "string" ? body.answer : "";
+    const trimmedAnswer = rawAnswer.trim();
     const totalDuration = Number.parseInt(String(body?.totalDuration ?? "0"), 10) || 0;
     const timeRemainingRaw = Number.parseInt(String(body?.timeRemaining ?? "0"), 10) || 0;
     const hintsUsed = Number.parseInt(String(body?.hintsUsed ?? "0"), 10) || 0;
     const userMessages = Number.parseInt(String(body?.userMessages ?? "0"), 10) || 0;
-    language = body?.language === "fr" ? "fr" : "en";
-    messages = language === "fr"
-      ? {
-          invalidParams: "Paramètres invalides",
-          authRequired: "Connecte-toi pour enregistrer ta tentative.",
-          riddleNotFound: "Énigme introuvable",
-          saveError: "Impossible d’enregistrer le score",
-          unexpected: "Erreur inattendue",
-          correctReasoning: "Ta réponse correspond à la solution officielle.",
-          correctFallback: "Bravo ! Ta réponse est juste.",
-          incorrectBase: "La réponse proposée ne correspond pas.",
-          missingLabel: "Points à retravailler",
-          whisperPrefix: "Le Maître te souffle :",
-        }
-      : {
-          invalidParams: "Invalid parameters",
-          authRequired: "Sign in to record your attempt.",
-          riddleNotFound: "Riddle not found",
-          saveError: "Unable to save the score",
-          unexpected: "Unexpected error",
-          correctReasoning: "Your answer matches the official solution.",
-          correctFallback: "Well done! Your answer matches the official solution.",
-          incorrectBase: "The proposed answer doesn't match.",
-          missingLabel: "Sharpen these points",
-          whisperPrefix: "The Master hints:",
-        };
+    const autoSubmitted = Boolean(body?.autoSubmitted);
+    const attachments =
+      body && typeof body === "object" && body.attachments && typeof body.attachments === "object"
+        ? (body.attachments as { audio?: unknown; photo?: unknown })
+        : {};
+    const audioDataUrl =
+      typeof attachments?.audio === "string" && attachments.audio.trim().length > 0 ? attachments.audio.trim() : null;
+    const photoDataUrl =
+      typeof attachments?.photo === "string" && attachments.photo.trim().length > 0 ? attachments.photo.trim() : null;
+
     console.log("[Submit] Incoming payload", {
       riddleId,
-      answerLength: answer.length,
+      answerLength: rawAnswer.length,
       totalDuration,
       timeRemainingRaw,
       hintsUsed,
       userMessages,
-      language,
+      requestedLanguage: body?.language,
+      autoSubmitted,
+      hasAudio: Boolean(audioDataUrl),
+      hasPhoto: Boolean(photoDataUrl),
     });
 
-    if (Number.isNaN(riddleId) || riddleId <= 0 || answer.length === 0) {
-      console.warn("[Submit] Invalid parameters", { riddleId, answerLength: answer.length });
+    if (Number.isNaN(riddleId) || riddleId <= 0) {
+      console.warn("[Submit] Invalid parameters", { riddleId });
       return NextResponse.json({ error: messages.invalidParams }, { status: 400 });
     }
 
-    const supabase: GenericSupabaseClient = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    const supabase: GenericSupabaseClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -212,7 +258,31 @@ export async function POST(request: Request) {
       (hint): hint is string => Boolean(hint),
     );
 
-    const normalizedUserAnswer = normalizeAnswer(answer);
+    let voiceTranscription: string | null = null;
+    let photoTranscription: string | null = null;
+    const supplementalNotes: string[] = [];
+
+    if (audioDataUrl) {
+      voiceTranscription = await transcribeAudioAttachment(audioDataUrl);
+      if (voiceTranscription) {
+        supplementalNotes.push(`Voice transcription:\n${voiceTranscription}`);
+      }
+    }
+
+    if (photoDataUrl) {
+      photoTranscription = await extractHandwrittenReasoning(photoDataUrl);
+      if (photoTranscription) {
+        supplementalNotes.push(`Handwritten notes:\n${photoTranscription}`);
+      }
+    }
+
+    const combinedSegments = [rawAnswer, ...supplementalNotes].filter(
+      (segment): segment is string => typeof segment === "string" && segment.trim().length > 0,
+    );
+    const evaluationAnswer = combinedSegments.join("\n\n");
+    const effectiveAnswer = evaluationAnswer.trim().length > 0 ? evaluationAnswer : trimmedAnswer;
+
+    const normalizedUserAnswer = normalizeAnswer(effectiveAnswer);
     const normalizedExpected = normalizeAnswer(riddle.solution ?? "");
     let correct = normalizedUserAnswer.length > 0 && normalizedUserAnswer === normalizedExpected;
     let judgeEvaluation = correct
@@ -244,11 +314,11 @@ export async function POST(request: Request) {
         riddleId,
         riddle.question ?? "",
         riddle.solution ?? "",
-        answer,
+        effectiveAnswer,
         calibration,
-      hints,
-      language,
-    );
+        hints,
+        language,
+      );
       console.log("[Submit] Judge responded", {
         riddleId,
         isCorrect: judgeEvaluation?.isCorrect,
@@ -328,9 +398,8 @@ export async function POST(request: Request) {
     const baseReasoning = judgeEvaluation?.reasoning?.trim();
     let missingElements = judgeEvaluation?.missingElements ?? [];
 
-    const successPrefix = language === "fr" ? "Bravo !" : "Well done!";
+    const successPrefix = "Well done!";
     const summary = formatScoreSummary({
-      language,
       score,
       rankingPercent,
       timeSpent,
@@ -349,17 +418,14 @@ export async function POST(request: Request) {
       detailedFeedback = await suggestWithLLM(
         openaiClient,
         riddle.question ?? "",
-        answer,
+        effectiveAnswer,
         hints,
         detailedFeedback,
         language,
       );
     }
 
-    const premiumLockedMessage =
-      language === "fr"
-        ? "Débloque le débrief complet pour accéder à l'analyse détaillée."
-        : "Unlock premium to access the full breakdown.";
+    const premiumLockedMessage = "Unlock premium to access the full breakdown.";
 
     const feedback = premiumAccess.unlocked
       ? `${summary}\n\n${detailedFeedback}`.trim()
@@ -389,6 +455,13 @@ export async function POST(request: Request) {
       hints: premiumAccess.unlocked ? displayHints : [],
       locked: !premiumAccess.unlocked,
       premiumAccess,
+      voiceTranscription,
+      photoTranscription,
+      attachments: {
+        audio: Boolean(audioDataUrl),
+        photo: Boolean(photoDataUrl),
+      },
+      autoSubmitted,
       unlockOptions: {
         single: {
           amountCents: PREMIUM_PRICES.single.amountCents,

@@ -17,7 +17,8 @@ const isResourceSlug = (value: string): value is ResourceSlug =>
   Object.hasOwn(RESOURCE_CATALOG, value as ResourceSlug);
 
 export async function GET() {
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = await cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -33,6 +34,10 @@ export async function GET() {
     .eq("status", "paid");
 
   if (error) {
+    if (error.code === "PGRST205") {
+      console.warn("[Resources] Table missing, returning empty list", error);
+      return NextResponse.json({ resources: [] });
+    }
     console.error("[Resources] Failed to list orders", error);
     return jsonError("Unable to fetch resource orders");
   }

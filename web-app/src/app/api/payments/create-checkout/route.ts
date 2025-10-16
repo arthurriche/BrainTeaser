@@ -7,13 +7,14 @@ import { PREMIUM_PRICES, RESOURCE_CATALOG, type ResourceSlug, SOCIAL_LINKS } fro
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY?.trim();
 const DEFAULT_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-type CheckoutKind = "single_riddle" | "subscription" | "resource";
+type CheckoutKind = "single_riddle" | "subscription" | "resource" | "donation";
 
 type CheckoutPayload = {
   kind?: CheckoutKind;
   riddleId?: number;
   resourceSlug?: string;
   locale?: string;
+  amountCents?: number;
 };
 
 const jsonError = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
@@ -118,6 +119,23 @@ export async function POST(request: Request) {
     params.append("line_items[0][price_data][unit_amount]", String(resource.amountCents));
     params.append("line_items[0][price_data][product_data][name]", resource.name);
     params.append("line_items[0][price_data][product_data][description]", resource.description);
+  } else if (kind === "donation") {
+    const amount = typeof payload.amountCents === "number" && Number.isFinite(payload.amountCents)
+      ? Math.max(100, Math.min(10_000, Math.round(payload.amountCents)))
+      : 100;
+    params.append("mode", "payment");
+    params.append("metadata[label]", "donation:one-time");
+    params.append("metadata[donation]", "true");
+    params.append("line_items[0][quantity]", "1");
+    params.append("line_items[0][price_data][currency]", "eur");
+    params.append("line_items[0][price_data][unit_amount]", String(amount));
+    params.append("line_items[0][price_data][product_data][name]", localeKey === "fr" ? "Don Enigmate" : "Enigmate donation");
+    params.append(
+      "line_items[0][price_data][product_data][description]",
+      localeKey === "fr"
+        ? "Contribution ponctuelle pour soutenir les énigmes."
+        : "One-time contribution to keep the riddles coming.",
+    );
   } else {
     return jsonError("Unsupported checkout kind");
   }

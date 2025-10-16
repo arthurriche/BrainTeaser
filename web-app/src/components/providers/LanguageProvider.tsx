@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo } from "react";
 
-type Language = "en" | "fr";
+type Language = "en";
 
 type TranslationEntry = string | ((params?: Record<string, unknown>) => string);
 type TranslationTree = { [key: string]: TranslationEntry | TranslationTree };
@@ -19,8 +19,6 @@ const getStringParam = (params: Record<string, unknown> | undefined, key: string
 
 type LanguageContextValue = {
   language: Language;
-  setLanguage: (language: Language) => void;
-  toggleLanguage: () => void;
   translate: (key: string, params?: Record<string, unknown>) => string;
 };
 
@@ -30,7 +28,6 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
   en: {
     nav: {
       tagline: "Sharpen your mind daily",
-      languageToggle: "Switch to French",
       resources: "Resources",
       logout: "Log out",
     },
@@ -80,13 +77,13 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       hintsUsed: "Hints spent",
       hintListTitle: "Hints to revisit",
       missingTitle: "Sharpen these points",
-      confidence: (params) => `Master's confidence: ${getNumberParam(params, "value")}%`,
+      confidence: (params) => `Evaluator confidence: ${getNumberParam(params, "value")}%`,
       loading: "Computing the ranking…",
       backHome: "Back to home",
       questionTitle: "Question",
       solutionTitle: "Official solution",
-      supportTitle: "Support the Master",
-      supportSubtitle: "Send a small tip to keep the riddles coming.",
+      supportTitle: "Support the challenge",
+      supportSubtitle: "Help keep daily riddles coming with a small tip.",
       supportAmountLabel: "Choose your contribution",
       supportTotalLabel: "Enigmate support",
       supportConfigure: "Configure Stripe keys to enable Apple Pay donations.",
@@ -98,12 +95,12 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       },
       supportErrorGeneric: "Unable to complete the donation.",
       supportScriptError: "Stripe.js could not be loaded. Check your network or configuration.",
-      premiumTitle: "Unlock the full debrief",
-      premiumSubtitle: "Choose how you want to access the Master's detailed feedback.",
+      premiumTitle: "Unlock detailed feedback",
+      premiumSubtitle: "Choose how you want to access the complete explanation.",
       premiumUnlockSingle: (params) => `Unlock this riddle for ${getStringParam(params, "price", "€1.00")}`,
       premiumUnlockSubscription: (params) => `Full month access for ${getStringParam(params, "price", "€9.90")}/month`,
       premiumProcessing: "Redirecting to secure checkout…",
-      premiumResourcesLead: (params) => `Want more? Grab the PDF masterclasses for ${getStringParam(params, "price", "€15.00")}.`,
+      premiumResourcesLead: (params) => `Want more? Grab the PDF strategy packs for ${getStringParam(params, "price", "€15.00")}.`,
       premiumResourcesCta: "Browse the resources",
       premiumLockedHints: "Unlock premium to reveal every hint and detailed breakdown.",
       premiumLockedQuestion: "Unlock premium access to read the full statement and context.",
@@ -111,7 +108,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       premiumActiveSubscription: (params) => `Premium active – access guaranteed until ${getStringParam(params, "date", "soon")}.`,
       premiumActiveSubscriptionNoDate: "Premium active – all detailed breakdowns unlocked.",
       premiumActiveSingle: "Detailed insights unlocked for this riddle.",
-      socialTitle: "Keep learning with us",
+      socialTitle: "Stay connected",
       socialInstagram: (params) => `Instagram · ${getStringParam(params, "handle", "@just2entrepreneurs")}`,
       socialLinkedIn: "LinkedIn · Arthur Riché",
       premiumErrorUnavailable: "Checkout is unavailable right now. Reload and try again.",
@@ -124,7 +121,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     },
     resources: {
       title: "Premium resources",
-      subtitle: "Download our PDF courses to go deeper with Enigmate and the Master.",
+      subtitle: "Download our PDF courses to go deeper with Enigmate.",
       highlightSuccess: "Checkout confirmed! Your premium pack is ready.",
       purchaseCta: (params) => `Buy for ${getStringParam(params, "price", "€15.00")}`,
       processing: "Redirecting to checkout…",
@@ -163,7 +160,7 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
       targetTime: (params) => `Target time: ${getNumberParam(params, "minutes")} min`,
       promptLabel: "Prompt",
       answerLabel: "Your answer",
-      answerPlaceholder: "Describe your reasoning and final answer.",
+      answerPlaceholder: "Explain your full reasoning and final answer. You may respond in any language—just keep the logic explicit to earn every point.",
       status: {
         timeRemaining: "Time left",
         hintsUsed: "Hints used",
@@ -187,168 +184,6 @@ const TRANSLATIONS: Record<Language, TranslationTree> = {
     },
     modals: {
       authRequired: "Sign in to record your run.",
-    },
-  },
-  fr: {
-    nav: {
-      tagline: "Aiguise ton esprit chaque jour",
-      languageToggle: "Switch to English",
-      resources: "Ressources",
-      logout: "Se déconnecter",
-    },
-    intro: {
-      badge: "Brain teaser du jour",
-      heroTitle: "Prêt à te concentrer ?",
-      heroHighlight: (params) => `Résous un brain teaser en ${getNumberParam(params, "minutes") || "??"} minutes environ.`,
-      heroDescription:
-        "Prends un moment de calme, découvre le contexte, puis lance le défi quand tu es prêt.",
-      primaryCta: "Commencer le brain teaser",
-      retry: "Actualiser",
-      loading: "Ça charge, sois prêt",
-      info: {
-        durationLabel: "Durée recommandée",
-        progressionLabel: "Énigme",
-        dateLabel: "Publié",
-      },
-      imagePlaceholder: "L'illustration se dévoile au lancement.",
-      lockedTitle: "L'énoncé est masqué",
-      lockedDescription:
-        "Tu verras la question complète et l'image dès que tu cliqueras sur “Commencer le brain teaser”.",
-      emptyTitle: "Aucune énigme disponible",
-      emptyDescription: "Reviens demain pour poursuivre le duel.",
-    },
-    loading: {
-      title: "Cette énigme est bien corsée…",
-      subtitle: "Si tu la réussis, t'es le GOAT.",
-    },
-    error: {
-      title: "Impossible de charger l'énigme",
-      subtitle: "Réessaie dans un instant.",
-      cta: "Réessayer",
-    },
-    scoreboard: {
-      badge: "Classement",
-      heading: (params) => `Résultats de l'énigme n°${getNumberParam(params, "id") || "?"}`,
-      scoreLabel: "Score",
-      fallbackFeedback: "Ta tentative est enregistrée. Reviens demain pour une nouvelle énigme.",
-      outrankLabel: "Tu surpasses",
-      percentSuffix: "% des challengers",
-      players: (params) => {
-        const beaten = getNumberParam(params, "beaten");
-        const total = getNumberParam(params, "total");
-        return total > 0 ? `${beaten} joueurs sur ${total}` : "Pas encore de comparaison disponible";
-      },
-      timeUsed: "Temps écoulé",
-      hintsUsed: "Indices utilisés",
-      hintListTitle: "Indices à retenir",
-      missingTitle: "Points à affiner",
-      confidence: (params) => `Confiance du Maître : ${getNumberParam(params, "value")}%`,
-      loading: "Calcul du classement…",
-      backHome: "Retour à l'accueil",
-      questionTitle: "Énoncé",
-      solutionTitle: "Solution détaillée",
-      supportTitle: "Soutiens Le Maître",
-      supportSubtitle: "Offre un petit pourboire pour faire vivre les énigmes.",
-      supportAmountLabel: "Montant de ton soutien",
-      supportTotalLabel: "Soutien Enigmate",
-      supportConfigure: "Configure les clés Stripe pour activer les dons Apple Pay.",
-      supportUnavailable: "Apple Pay n'est pas disponible sur cet appareil. Essaie depuis Safari avec Apple Pay activé.",
-      supportProcessing: "Traitement de ton don Apple Pay…",
-      supportSuccess: (params) => {
-        const amount = params && typeof params === "object" ? (params as { amount?: unknown }).amount : undefined;
-        return `Merci ! ${typeof amount === "string" ? amount : "0,30 €"} versés pour soutenir les énigmes.`;
-      },
-      supportErrorGeneric: "Le don n'a pas pu être finalisé.",
-      supportScriptError: "Impossible de charger Stripe.js. Vérifie ta connexion ou ta configuration.",
-      premiumTitle: "Débloque le débrief complet",
-      premiumSubtitle: "Choisis comment accéder aux explications détaillées du Maître.",
-      premiumUnlockSingle: (params) => `Débloquer cette énigme (${getStringParam(params, "price", "1,00 €")})`,
-      premiumUnlockSubscription: (params) => `Abonnement mensuel (${getStringParam(params, "price", "9,90 €")}/mois)`,
-      premiumProcessing: "Redirection vers le paiement sécurisé…",
-      premiumResourcesLead: (params) => `Envie d'aller plus loin ? Découvre nos formations PDF pour ${getStringParam(params, "price", "15,00 €")}.`,
-      premiumResourcesCta: "Voir les ressources",
-      premiumLockedHints: "Débloque le premium pour révéler chaque indice et l'analyse complète.",
-      premiumLockedQuestion: "Débloque le premium pour lire l'énoncé complet et le contexte.",
-      premiumLockedSolution: "Débloque le premium pour obtenir la solution officielle et le débrief détaillé.",
-      premiumActiveSubscription: (params) => `Premium actif – accès garanti jusqu'au ${getStringParam(params, "date", "prochain renouvellement")}.`,
-      premiumActiveSubscriptionNoDate: "Premium actif – tous les débriefs sont débloqués.",
-      premiumActiveSingle: "Analyse détaillée débloquée pour cette énigme.",
-      socialTitle: "Suis-nous pour progresser",
-      socialInstagram: (params) => `Instagram · ${getStringParam(params, "handle", "@just2entrepreneurs")}`,
-      socialLinkedIn: "LinkedIn · Arthur Riché",
-      premiumErrorUnavailable: "Paiement indisponible pour le moment. Recharge la page et réessaie.",
-      premiumErrorGeneric: "Impossible de lancer le paiement. Réessaie dans un instant.",
-    },
-    scoreboardErrors: {
-      generic: "Impossible de récupérer le classement.",
-      auth: "Connecte-toi pour accéder au classement.",
-      none: "Aucun score enregistré pour l'instant.",
-    },
-    resources: {
-      title: "Ressources premium",
-      subtitle: "Télécharge nos cours PDF pour approfondir Enigmate et les secrets du Maître.",
-      highlightSuccess: "Paiement confirmé ! Ton pack premium est prêt.",
-      purchaseCta: (params) => `Acheter pour ${getStringParam(params, "price", "15,00 €")}`,
-      processing: "Redirection vers le paiement sécurisé…",
-      download: "Télécharger le PDF",
-      ownedBadge: "Débloqué",
-      error: "Impossible de lancer le paiement. Réessaie dans un instant.",
-      listTitle: "Ce que tu vas trouver",
-      followTitle: "Reste connecté",
-      followInstagram: (params) => `Instagram · ${getStringParam(params, "handle", "@just2entrepreneurs")}`,
-      followLinkedIn: "LinkedIn · Arthur Riché",
-    },
-    payments: {
-      successTitle: "Paiement confirmé",
-      successSubtitle: "L'accès est débloqué — profite de l'expérience complète.",
-      successSingle: (params) => `Débrief détaillé débloqué pour ${getStringParam(params, "price", "1,00 €")}.`,
-      successSubscription: (params) => `Premium mensuel activé pour ${getStringParam(params, "price", "9,90 €")} — accès garanti jusqu'au ${getStringParam(params, "date", "prochain renouvellement")}.`,
-      successSubscriptionNoDate: "prochain renouvellement",
-      successResource: (params) => `Ressource débloquée pour ${getStringParam(params, "price", "15,00 €")}.`,
-      loadingTitle: "Confirmation du paiement",
-      loadingSubtitle: "On sécurise ton accès, reste concentré.",
-      errorTitle: "Vérification impossible",
-      errorGeneric: "Impossible de confirmer le paiement. Contacte-nous si le souci persiste.",
-      errorMissing: "Référence de paiement manquante. Retourne sur l'app et réessaie.",
-      downloadResource: "Télécharger le PDF",
-      returnButton: "Retour sur Enigmate",
-      cancelledTitle: "Paiement annulé",
-      cancelledSubtitle: "Aucun débit. Tu peux relancer le paiement quand tu veux.",
-      cancelledRetry: "Revenir aux ressources",
-    },
-    riddle: {
-      stageLabel: "Énigme",
-      heroTitle: "Concentre-toi sur la solution",
-      puzzleNumber: (params) => `Énigme n°${getNumberParam(params, "id") || "?"}`,
-      difficulty: (params) => getStringParam(params, "label"),
-      releaseDate: (params) => `Publié le ${getStringParam(params, "date")}`,
-      targetTime: (params) => `Durée cible : ${getNumberParam(params, "minutes")} min`,
-      promptLabel: "Énoncé",
-      answerLabel: "Ta réponse",
-      answerPlaceholder: "Décris ton raisonnement complet et ta proposition finale.",
-      status: {
-        timeRemaining: "Temps restant",
-        hintsUsed: "Indices utilisés",
-      },
-      hintSectionTitle: "Indices",
-      hintLabel: (params) => `Indice ${getNumberParam(params, "index")}`,
-      hintReveal: (params) => `Révéler l'indice ${getNumberParam(params, "next")}`,
-      hintReminder: "Utilise les indices avec parcimonie : chacun réduit ton score final.",
-      submit: "Valider ma réponse",
-      submitLoading: "Validation…",
-      support: "Soutenir via Apple Pay (0,30 €)",
-      backHome: "Retour à l'accueil",
-    },
-    timer: {
-      label: "Chronomètre",
-      finished: "Terminé",
-      critical: "Temps critique",
-      running: "En cours",
-      idle: "Initialisation",
-      helper: "Le chrono démarre automatiquement : reste concentré jusqu'à la résolution.",
-    },
-    modals: {
-      authRequired: "Connecte-toi pour enregistrer ta tentative.",
     },
   },
 };
@@ -375,25 +210,10 @@ const formatString = (template: string, params?: Record<string, unknown>) => {
 };
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-  const [language, setLanguage] = useState<Language>("en");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem("enigmate-language") as Language | null;
-    if (stored === "en" || stored === "fr") {
-      setLanguage(stored);
-    } else {
-      const browser = window.navigator.language.startsWith("fr") ? "fr" : "en";
-      setLanguage(browser);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("enigmate-language", language);
-    document.documentElement.lang = language;
-  }, [language]);
-
+  const language: Language = "en";
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = "en";
+  }
   const translate = useCallback(
     (key: string, params?: Record<string, unknown>) => {
       const segments = key.split(".");
@@ -407,13 +227,9 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
     [language],
   );
 
-  const toggleLanguage = useCallback(() => {
-    setLanguage((prev) => (prev === "en" ? "fr" : "en"));
-  }, []);
-
   const value = useMemo<LanguageContextValue>(
-    () => ({ language, setLanguage, toggleLanguage, translate }),
-    [language, toggleLanguage, translate],
+    () => ({ language, translate }),
+    [translate],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

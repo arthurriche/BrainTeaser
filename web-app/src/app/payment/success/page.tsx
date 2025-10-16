@@ -38,8 +38,8 @@ type ConfirmPayload =
       error: string;
     };
 
-const getCurrencyFormatter = (locale: "en" | "fr") =>
-  new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", {
+const getCurrencyFormatter = () =>
+  new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "EUR",
     minimumFractionDigits: 2,
@@ -54,7 +54,7 @@ function PaymentSuccessContent() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const priceFormatter = useMemo(() => getCurrencyFormatter(language), [language]);
+  const priceFormatter = useMemo(() => getCurrencyFormatter(), []);
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
@@ -93,7 +93,7 @@ function PaymentSuccessContent() {
           setMessage(t("payments.successSingle", { price }));
         } else if (payload.kind === "subscription") {
           const dateLabel = payload.validUntil
-            ? new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+            ? new Intl.DateTimeFormat("en-US", {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
