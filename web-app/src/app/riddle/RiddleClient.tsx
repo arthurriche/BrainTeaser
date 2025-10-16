@@ -13,9 +13,19 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { TopBar } from "@/components/layout/TopBar";
 import { useTranslations } from "@/components/providers/LanguageProvider";
 import { SOCIAL_LINKS } from "@/lib/premium";
-import type { Stripe, StripePaymentRequest, StripePaymentRequestPaymentMethodEvent } from "../../../types/stripe";
+import type {
+  Stripe,
+  StripeConstructor,
+  StripePaymentRequest,
+  StripePaymentRequestPaymentMethodEvent,
+} from "../../../types/stripe";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+
+const getStripeConstructor = (): StripeConstructor | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { Stripe?: StripeConstructor }).Stripe;
+};
 
 interface RiddlePayload {
   id: number;
@@ -188,9 +198,11 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
     let cancelled = false;
 
     const initialiseStripe = () => {
-      if (cancelled || !window.Stripe) return;
+      if (cancelled) return;
+      const stripeCtor = getStripeConstructor();
+      if (!stripeCtor) return;
       try {
-        const instance = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        const instance = stripeCtor(STRIPE_PUBLISHABLE_KEY);
         setStripe(instance);
       } catch (error) {
         console.error("[SupportApplePay] Failed to initialise Stripe", error);
@@ -199,7 +211,7 @@ const SupportApplePaySection = ({ t, language }: { t: TranslateFn; language: "en
       }
     };
 
-    if (window.Stripe) {
+    if (getStripeConstructor()) {
       initialiseStripe();
       return () => {
         cancelled = true;

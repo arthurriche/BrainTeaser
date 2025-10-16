@@ -56,11 +56,3 @@ export type Stripe = {
 };
 
 export type StripeConstructor = (publishableKey: string) => Stripe;
-
-declare global {
-  interface Window {
-    Stripe?: StripeConstructor;
-  }
-}
-
-export {};
